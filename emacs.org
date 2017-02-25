@@ -1,0 +1,111 @@
+#+TITILE github
+
+* github
+** command line
+   echo "# org" >> README.md
+   git init
+   git add README.md
+   git commit -m "first commit"
+   git remote add origin https://github.com/zhangdongfeng/org.git
+   git push -u origin master
+
+* emacs
+
+** init.el
+  git clone https://github.com/purcell/emacs.d.git ~/.emacs.d
+  (require 'ido)
+  (ido-mode t)
+  (require 'xcscope)
+  (add-hook 'c-mode-common-hook 'cscope-minor-mode)
+** org
+S-TAB	循环切换整个文档的大纲状态（折叠、打开下一级、打开全部）
+TAB	循环切换光标所在的大纲状态
+C-c C-n/p	移动到下上一个标题（不断标题是哪一级）
+C-c C-f/b	移动到同一级别的下/上标题
+C-c C-u	跳到上一级标题
+C-c C-j	切换到大纲预览状态
+M-RET	插入一个同级别的标题
+M-S-RET	插入一个同级别的TODO标题
+M-LEFT/RIGHT	将当前标题升/降级
+M-S-LEFT/RIGHT	将子树升/降级
+M-S-UP/DOWN	将子树上/下移动
+C-c *	将本行设为标题或者正文
+C-c C-w	将子树或者区域移动到另一个标题处（跨缓冲区）
+C-c C-x b	在新缓冲区显示当前分支
+C-c /	只列出包含搜索结果的大纲，并高亮，支持多种搜索方式
+** doc
+  神器中的神器org-mode之入门篇
+  http://www.cnblogs.com/qlwy/archive/2012/06/15/2551034.html
+  Emacs 24.4 Released, How to Install it in Ubuntu 14.04
+  http://ubuntuhandbook.org/index.php/2014/10/emacs-24-4-released-install-in-ubuntu-14-04/
+  https://www.emacswiki.org/emacs/SiteMap
+  org-mode: 最好的文档编辑利器，没有之一
+  http://www.cnblogs.com/holbrook/archive/2012/04/12/2444992.html#3590958
+  https://www.zhihu.com/question/27478438
+  Emacs Starter Kit
+  http://eschulte.github.io/emacs-starter-kit/
+  magit
+  https://github.com/magit/magit/blob/master/Documentation/magit.texi
+  http://blog.csdn.net/amuseme_lu/article/details/6931908
+  http://www.emacswiki.org/emacs/Magit
+  https://magit.vc/manual/magit/Getting-started.html
+  https://magit.vc/manual/magit/index.html#SEC_Contents
+  Emacs编辑器——王垠
+  http://blog.csdn.net/superwen_go/article/details/8235185
+  有哪些是必备的emacs扩展？
+  https://www.zhihu.com/question/21943533
+  Programming in Emacs+Sematic
+  http://docs.huihoo.com/homepage/shredderyin/wiki/ProgrammingTricks.html
+  Sams Teach Yourself Emacs in 24 Hours
+  http://docs.huihoo.com/homepage/shredderyin/emacs24/index.htm
+  我的Emacs折腾经验谈(一) 一些给新人的建议 –
+  http://www.tuicool.com/articles/rIBBJn
+  Emacs: How to Install Packages Using ELPA, MELPA
+  http://ergoemacs.org/emacs/emacs_package_system.html
+  Quickly finding project files using Emacs EDE
+  http://stackoverflow.com/questions/23950534/quickly-finding-project-files-using-emacs-ede
+  The function to show current file's full path in mini buffer
+  http://stackoverflow.com/questions/3669511/the-function-to-show-current-files-full-path-in-mini-buffer
+  Imenu显示符号列表
+  http://www.gnu.org/software/emacs/manual/html_node/emacs/Imenu.html
+  InteractivelyDoThings
+  http://stackoverflow.com/questions/7394289/how-can-i-more-easily-switch-between-buffers-in-emacs
+  https://www.emacswiki.org/emacs/InteractivelyDoThings
+  Searching for marked (selected) text in Emacs
+  http://www.gnu.org/software/emacs/manual/html_node/emacs/index.html#SEC_Contents
+  Emacs dired 模式
+  http://blog.csdn.net/cxmanzhao/article/details/5685016
+  emacs 快捷键（包括C／C++模式）
+  http://www.cnblogs.com/xinxianshi/archive/2011/07/20/2157264.html
+  emacs + cscope 的使用
+  http://blog.chinaunix.net/uid-20788636-id-1841254.html
+  在Emacs下用C/C++编程
+  http://blog.chinaunix.net/uid-9478057-id-2002272.html
+  http://www.caole.net/diary/emacs_write_cpp.html
+  使用gtags、etags、cscope、grep浏览源代码
+  http://blog.csdn.net/wuyao721/article/details/3059242
+  Cscope在emacs中的配置与使用
+  http://www.cnblogs.com/jtf-china/articles/2077922.html
+  一年成为Emacs高手(像神一样使用编辑器)
+  http://
+blog.csdn.net/redguardtoo/article/details/7222501/
+  https://www.emacswiki.org
+  https://github.com/purcell/emacs.d
+  https://www.emacswiki.org/emacs/EmacsWiki
+  Org-mode 简明手册
+  http://orgmode.org
+  http://www.cnblogs.com/Open_Source/archive/2011/07/17/2108747.html
+  暴增 Emacs 生产力的十大最佳插件
+  http://www.linuxidc.com/Linux/2016-01/127456.htm
+  A Package in a league of its own: Helm
+  http://tuhdo.github.io/helm-intro.html
+  https://www.emacswiki.org/emacs/FindFileInProject
+  rst mode in emacs on osx - cannot create pdf
+  http://stackoverflow.com/questions/12602490/rst-mode-in-emacs-on-osx-cannot-create-pdf
+  https://www.gnu.org/gnu/rms-lisp.html
+  http://mirror.hust.edu.cn/gnu/
+  https://en.wikipedia.org/wiki/Emacs_Lisp
+** cscope
+   find frameworks/ packages/ bionic/ dalvik/ bootable/ libcore/ -name '*.c' -print -o -name '*.h' -print -o -name '*.cpp' -print -o -name '*.java' -print > cscope.files
+   cscope –b –q -k
+   find frameworks/ packages/ bionic/ dalvik/ bootable/ libcore/ -name '*.c' -print -o -name '*.h' -print -o -name '*.cpp' -print -o -name '*.java' –print | xargs etags -a
