@@ -1,0 +1,617 @@
+* 3503
+** 自己搭建服务器格式
+注：以下json格式为伪格式，字段和字符型的值的引号都忽略了
+
+1.订阅topic希望加上应用名
+例如：小机端订阅 storybox/mac地址/server 和 storybox/mac地址/server/page
+服务端订阅 storybox/+/client 和 storybox/+/server/page
+
+2.远程设置
+1）音量调节
+发起方：页面
+接收方：小机
+格式：{ cmd:setVolume, value:50}
+
+2）远程关机
+发起方：页面
+接收方：小机
+格式：{ cmd:setPoweroff}
+
+3)主动询问音量
+发起方：页面
+接收方：小机
+格式：{ cmd:getVolume}
+
+4)小机音量，这里2种情况：主动询问后的回答及小机音量变化
+发起方：小机
+接收方：页面
+格式：{volume:50}
+{"volume":38}
+
+3.故事机信息显示
+1）主动询问故事机信息
+发起方：页面
+接收方：小机
+格式：{ cmd:getBoxInfo}
+
+2)故事机信息
+发起方：小机
+接收方：页面
+格式：{boxInfo:{net:xxx,cardAvailable:xxx,cardTotal:xxx, electricity:xxx,firmwareVersion:xxx}}
+{"boxInfo":{"net":"ess","cardAvailable":208,"cardTotal":300, "electricity":80,"firmwareVersion":"34343434"}}
+
+4.设备的上下线管理
+1)设备上线，设备上线及
+发起方：小机
+接收方：服务器和页面
+格式：{onlineStatus:on}
+{"onlineStatus":"on"}
+
+
+2)设备下线
+发起方：小机
+接收方：服务器和页面
+格式：{onlineStatus:off}
+{"onlineStatus":"off"}
+
+3)设备掉线
+发起方：小机
+接收方：服务器和页面
+格式：{onlineStatus:abnormal}
+{"onlineStatus":"abnormal"}
+
+4）主动询问设备是否在线
+发起方：页面
+接收方：小机
+格式：{ cmd:getOnlineStatus}
+小机答复: {"onlineStatus":"online"}
+
+
+8.上线时列表及信息同步
+1)设备主动询问需要同步的列表
+发起方：小机
+接收方：服务器
+格式：{ cmd:getUpdateListId}    {"cmd":"getUpdateListId"}
+服务器回复：{ cmd:setUpdateListId,trackListIds:[1,2,3,4]}
+和 SetPlayTrackListId
+
+
+
+在新增一个列表时 {cmd:addList,trackListId:xxx,name:xxx}
+移除一个列表 {cmd:delList,trackListId:xxx}
+
+2)
+发起方：小机
+接收方：服务器
+格式：{ cmd:getList,trackListId:xxx}  {"cmd":"getList","trackListId":1}
+服务器回复：{cmd:setList, trackListId:xxx,name:xxx,trackIds:[1,2,3]}
+
+
+
+3)设备在线时编辑列表后服务器发送
+发起方：服务器
+接收方：小机
+格式：{cmd:listAddTrack, trackListId:xxx,trackIds:[1,2,3]}
+{cmd:listRemoveTrack,trackListId:xxx,trackIds:[1,2,3]}
+
+
+11.文件下载功能
+1)文件下载成功后
+发起方：小机
+接收方：服务器/页面
+格式：{downloadStatus:xxx,trackId:1, url:xxxx}  xxx为success,error,full
+{"downloadStatus":"success","trackId":203, "url":"xxxx"}
+
+2)批量文件下载成功后
+发起方：小机
+接收方：服务器/页面
+格式：{downloadStatus:xxx,trackIds:[1,2,3]}  xxx为success,error,full
+{"downloadStatus":"success","trackIds":[1,2,3]}
+
+
+
+
+12.正在播放状态显示& 遥控公仔功能
+1)页面主动向小机请求获取当前歌曲
+发起方：页面
+接收方：小机
+格式：{cmd:getTrack} 获取当前播放歌曲，或者点播歌曲。
+
+
+2)页面主动向小机请求获取当前播放状态
+发起方：页面
+接收方：小机
+格式：{cmd:getPlayStatus} playing pause
+
+3)小机播放状态改变
+发起方：小机
+接收方：页面
+格式：{playStatus:xxx}  xxx为playing,pause
+{"playStatus":"playing"}
+
+4)小机播放歌曲的改变，这里也是页面主动向小机请求获取当前歌曲的答复
+发起方：小机
+接收方：页面
+格式：返回{trackListId:5,trackId:1,type:0} type=0普通列表播放 1点播 2留言
+type=1和2时，trackListId保持原值返回
+
+当播放列表改变时,消息: {"changedTrackListId":3}
+
+
+5)发起方：页面
+接收方：小机
+格式：
+下一首 {cmd:forward}
+上一首 {cmd:backward}
+暂停 {cmd:pause}
+继续播放 {cmd:resume}
+
+6）播放列表设置
+发起方：页面
+接收方：小机
+格式：{cmd:setPlayTrackLists,trackListIds:[3,4,5]}
+
+
+小机从服务端拿track的信息
+{ cmd:getTrackInfo， trackId:xxx}   id为trackid
+
+{"cmd":"getTrackInfo","trackId":7161457}
+服务端回复
+{cmd:trackInfo,id:xxx,title:xxx,url:xxx,downloadUrl:xxx}
+
+批量询问track信息
+{"cmd":"getTrackInfoArray","trackIds":[3,4,5]}
+答复
+{cmd:trackInfoArray,data:[ {id:xxx,title:xxx,url:xxx,downloadUrl:xxx}]}
+
+小机从服务端拿回传需要的信息
+{ cmd:getTrackInfoForCollector， trackId:xxx}   id为trackid
+服务端回复
+{cmd:trackInfoForCollector,sourceId:xxx,duration:100,customerId:0,appKey:xxx,appSecret:xxx}  sourceId为厂商的资源id
+
+
+7)页面主动询问播放列表
+发起方：页面
+接收方：小机
+格式：{cmd:getPlayTrackListId}
+答复：{playTrackListIds:[3,4,5]}
+{"playTrackListIds":[25,26]}
+
+
+8)播放歌
+发起方：页面
+接收方：小机
+格式：{cmd:playTrack,trackListId:5,trackId:1,url:xxx,downloadUrl:xxx}
+
+
+9)播放网络上的歌曲
+发起方：页面
+接收方：小机
+格式：{cmd:playTracks,trackIds:[1,2,3]}
+
+
+14. 留言功能
+发起方：服务器
+接收方：小机
+格式：{cmd:playVoice,url:xxx}
+
+发起方：小机
+接收方：服务端
+格式：{voiceMediaId:xxx}
+{"voiceMediaId":"z7xJObuOFDNZT4HKHAlOMK8KafN32MPFgaBoHQJkONPXR4_AYXNx7OFRwjJTxmhi"}
+
+15.点播
+发起方：服务器
+接收方：小机
+格式：{cmd:demandMusic,voiceUrl:xxx,trackId:5,url:xxx}
+
+开始播放点播
+发起方：小机
+接收方：服务器
+格式：{cmd:startDemandMusic,trackId:5}
+
+在线点播
+发起方：服务器
+接收方：小机
+格式：{cmd:demandMusicOnline,trackId:5,url:xxx}
+
+
+
+18.预置功能开发
+1）初始化列表
+发起方：小机
+接收方：服务器
+格式：{cmd:initTrackList,trackListId:0,name:xxx,trackIds:[1,2,3]}
+
+{"cmd":"initTrackList","trackListId":0,"name":"国学","trackIds":[1,2,3,4,5]}
+
+2)初始化结果
+发起方：服务器
+接收方：小机
+格式：{cmd: initret,trackListId: 32,name:国学}
+
+
+3)询问小机初始列表内容
+发起方：页面
+接收方：小机
+格式：{"cmd":"getInitialTrackList","trackListId":32}
+
+4)小机答复初始列表内容
+发起方：小机
+接收方：服务器
+格式：{"cmd":"initialTrackList","trackListId":32,"trackIds":[1,2,3,4,5]}
+
+
+
+19.设置播放模式
+发起方：页面
+接收方：小机
+{ cmd:setMode, value:xxx}   xxx为 repeat one，repeat all
+
+主动询问播放模式
+发起方：页面
+接收方：小机
+格式：{ cmd:getMode}
+
+播放模式变化，这里也包括主动询问后的答复
+发起方：小机
+接收方：页面
+格式：{ mode:xxx}
+
+播放表情
+{cmd:playVoiceEmoji,voiceUrl:xxx}
+
+
+
+OTA升级
+{cmd:"upgrade","versionName":"xx","firmwareUrl":"xxx"}
+
+
+开始升级
+发起方：小机
+接收方：服务器和页面
+格式：{onlineStatus:off-for-upgrade}      （废弃{cmd:"startUpgrade"} ）
+
+
+5)升级失败后重新上线
+发起方：小机
+接收方：服务器和页面
+格式：{onlineStatus:on-upgrade-failed}    （废弃{upgradeResult:success} success/failed）
+
+网络配置成功后的消息
+{"configWifi":"success"}
+
+让设备进入测试模式
+{"cmd":"startTestMode","url":"xxx"}
+
+设备测试完回传测试报告
+{"cmd":"quitTestMode","content":"xxx"}
+
+
+页面询问故事机列表内容
+{"cmd":"getTracks","trackListId":x} x是大于0的整数（代表普通列表）和-1（代表在线列表）
+故事机返回内容
+{"cmd":"trackListContent","trackListId":x,"trackIds":[1,2,3]}
+** mqtt_api.h
+#ifndef __HEADER_H__
+#define __HEADER_H__
+/*loop_mode_t - player mode
+ *  REPEAT_ONE: repeat one
+ *  REPEAT_ALL: repeat all
+ * This enum is used in send_loop_mode as a argument
+ */
+typedef enum {
+        REPEAT_ONE,
+        REPEAT_ALL
+}loop_mode_t;
+
+/*play_status_t - player status
+ *  PLAY: playing status
+ *  PAUSE: pause status
+ * This enum is used in send_play_status as a argument
+ */
+typedef enum {
+        PLAY,
+        PAUSE
+}play_status_t;
+
+
+/*music_track_info_t - the struct describes a track(music or story) for normal play or download
+ *  @track_id: track id of the music or story
+ *  @play_url: url of the music or story
+ *  @download_url: download url of the music or story
+ * This struct describes a music or story to play or download
+ */
+typedef struct{
+        int track_id;
+        char *play_url;
+        char *download_url;
+}music_track_info_t;
+
+/*demand_music_info_t - the struct describes a track(music or story) on demand
+ *  @voice_url: url of the notify voice
+ *  @url: url of the music or story
+ *  @track_id: track id of the music or story
+ * This struct describes a music or story on demand
+ */
+typedef struct {
+        char *voice_url;
+        char *url;
+        int track_id;
+}demand_music_info_t;
+
+/**track_list_t - list of tracks
+ *  @name: list name
+ *  @id: list id
+ *  @size: list size
+ *  @trackIDs: track id array in this list
+ * This struct describes a track list. It is used for play list operations.
+ */
+typedef struct {
+        char *name;
+        int id;
+        int size;
+        int *trackIDs;
+}track_list_t;
+
+/**command_type_t - received server message , command type
+ * This enum describes simple command types.
+ */
+typedef enum {
+        Play,
+        Pause,
+        Resume,
+        Next,
+        Prev,
+        SetVolume,
+        GetVolume,
+        SetLoopMode,
+        GetLoopMode,
+        GetCurrentTrack,
+        GetSysInfo,
+        SetPowerOff,
+        GetPlayStatus,
+        GetOnlineStatus,
+        SetPlayTrackListId,
+        GetPlayTrackListId,
+        GetTracksById,
+        GetPlayProgress
+}command_type_t;
+
+/**Sys_info_t - sys info
+ * This struct describes system information.
+ */
+typedef struct SysInfo {
+        char ssid[64];
+        char fw_version[64];
+        bool is_charging;
+        int battery_vol;
+        int storage_total;
+        int storage_free;
+}Sys_info_t;
+
+
+/**play_list_arg_t - argument for SetPlayTrackListId command
+ * @ids: id array
+ * @size: id array size
+ * This struct describes list ids to set.
+ * SetPlayTrackListId can set one or more lists at one time
+ */
+typedef struct {
+        int *ids;
+        int size;
+}play_list_arg_t;
+
+/**play_list_arg_t - argument for Play command
+ * @list_id: list id
+ * @track_id£º track id
+ * @play_url: play url
+ * @download_url£º download url
+ *
+ */
+typedef struct {
+        int list_id;
+        int track_id;
+        char *play_url;
+        char *download_url;
+}play_track_arg_t;
+
+/**fw_info_t - firmware information
+ * @version: firmware version
+ * @url£º firmware download url
+ * This struct is used to transform fw information
+ */
+typedef struct {
+        char *version;
+        char *url;
+}fw_info_t;
+
+/**track_type_t - track type
+ * MUSIC_TYPE: music or story normal type
+ * DEMAND_TYPE£º on demand type
+ * VOICE_TYPE: voice type
+ * This enum is used in send_current_track as an argument
+ */
+typedef enum {
+        MUSIC_TYPE,
+        DEMAND_TYPE,
+        VOICE_TYPE
+}track_type_t;
+
+/**download_state_t - download state
+ * DOWNLOAD_STATE_SUCCESS:
+ * DOWNLOAD_STATE_ERROR:
+ * DOWNLOAD_STATE_FULL:
+ * This enum is used in send_download_state as an argument
+ */
+typedef enum {
+        DOWNLOAD_STATE_SUCCESS,
+        DOWNLOAD_STATE_ERROR,
+        DOWNLOAD_STATE_FULL
+}download_state_t;
+
+/**************************APIs***************************************/
+/*DOC:
+ * 1. send_xxx APIs are realised in the lib,
+ *    the upper app can use them directly.
+ * 2. on_receive_xxx APIs are callback functions used in the lib,
+ *    the upper app must realised them all.
+ * 3. some simple commands are parsed in on_receive_command, the other commands are
+ *    parsed to different on_receive_xxx callbacks.
+ */
+
+
+
+/*on_receive_command - SET²Ù×÷----¸ù¾Ý²»Í¬µÄÉèÖÃÃüÁî£¬´«Èë»Øµ÷µÄarg²ÎÊýÒ²ÊÇ²»Í¬µÄ
+
+ *Play:               ´«Èë²ÎÊýÎªplay_track_arg_tÀàÐÍµÄÖ¸Õë£¬ÆäÖÐ´æ´¢ÐèÒª²¥·ÅµÄtrackÐÅÏ¢¡£
+ *Pause/Resume/Next/Prev£º´«Èë²ÎÊýÎªNULL£¬½øÐÐÏàÓ¦µÄ²Ù×÷¡£
+ *SetVolume£º         ´«Èë²ÎÊýÎªintÐÍÖ¸Õëint *vol£¬¼´ÎªÐèÒªÉèÖÃµÄvolume¡£
+ *SetLoopMode£º       ´«Èë²ÎÊýÎªintÐÍÖ¸Õë£¬×ª»¯Îªloop_mode_tÀàÐÍ½øÐÐ´¦Àí¡£
+ *SetPowerOff£º       ´«Èë²ÎÊýÎªNULL£¬½øÐÐ¹Ø»ú²Ù×÷¡£
+ *SetPlayTrackListId: ´«Èë²ÎÊýÎªstruct play_list_arg_tÀàÐÍ£¬ÉèÖÃÐ¡»ú¶ËÒª²¥·ÅµÄÁÐ±íids¡£
+*/
+
+/*on_receive_command - GET²Ù×÷----´«Èë²ÎÊý¶¼ÎªNULL, ÐèÒªµ÷ÓÃ¶ÔÓ¦µÄsendÃüÁî·¢ËÍÏàÓ¦µÄ×´Ì¬¸ø·þÎñÆ÷
+
+ *GetVolume:	»ñÈ¡ÒôÁ¿£¬°Ñµ±Ç°ÒôÁ¿Í¨¹ýsend_volume½Ó¿Ú·¢³öÈ¥¡£
+ *GetLoopMode£º	»ñÈ¡²¥·ÅÄ£Ê½£¬°Ñµ±Ç°modeÍ¨¹ýsend_loop_mode·¢³ö¡£
+ *GetCurrentTrack:»ñÈ¡µ±Ç°²¥·ÅµÄtrackÐÅÏ¢£¬ÐèÒªÔÚ»Øµ÷ÖÐµ÷ÓÃsend_current_music·¢ËÍ³öÈ¥¡£
+ *GetSysInfo£º	»ñÈ¡µ½Ð¡»úÐÅÏ¢ºóÍ¨¹ýsend_sys_info·¢³öÀ´¡£
+ *GetPlayStatus: »ñÈ¡²¥·Å×´Ì¬£¬Í¨¹ýsend_play_statusÀ´·¢ËÍ¡£
+ *GetOnlineStatus£º»ñÈ¡Ð¡»úÊÇ·ñÔÚÏß£¬ÊÕµ½Õâ¸öÃüÁîÖ»ÐèÒªsend_online_status¼´¿É¡£
+ *GetPlayTrackListId£º»ñÈ¡Ð¡»ú¶ËÒª²¥·ÅµÄÁÐ±íids,µ÷ÓÃsend_play_list_id·¢ËÍ³öÈ¥¡£
+ */
+void on_receive_command(command_type_t cmd, void *arg);
+
+/* on_receive_emoji - Ð¡»ú½ÓÊÕµ½ÁË±íÇéÏûÏ¢¡£
+ * on_receive_text_message - Ð¡»ú½ÓÊÕµ½ÁËÎÄ×ÖÏûÏ¢¡£
+ * on_receive_voice_message - Ð¡»ú½ÓÊÕµ½ÁËÁôÑÔÏûÏ¢¡£
+ * on_receive_image_message - Ð¡»ú½ÓÊÕµ½ÁËÍ¼Æ¬ÏûÏ¢¡£
+ * on_receive_video_message - Ð¡»ú½ÓÊÕµ½ÁËÊÓÆµÏûÏ¢¡£
+ * on_receive_demand_music - Ð¡»ú½ÓÊÕµ½ÁËµã²¥ÏûÏ¢¡£
+ * send_message_download_success - Í¨Öª·þÎñÆ÷ÏûÏ¢×ÊÔ´ÒÑ¾­ÏÂÔØ
+ */
+void on_receive_emoji(char *url);
+void on_receive_text_message(char *text, char *nickname, char *avatar, int64_t timestamp);
+void on_receive_voice_message(char *url, char *nickname, char *avatar, int64_t timestamp);
+void on_receive_image_message(char *url, char *nickname, char *avatar, int64_t timestamp);
+void on_receive_video_message(char *url, char *nickname, char *avatar, int64_t timestamp);
+void on_receive_demand_music(demand_music_info_t *musicInfo);
+void on_receive_demand_music_online(demand_music_info_t *musicInfo);
+void send_message_download_success(char *resUrl);
+
+/*get_track_info_by_id - Ð¡»ú·¢ËÍÏûÏ¢µ½·þÎñÆ÷ÒÔ»ñÈ¡¸úidÏà¹ØµÄtrack info
+ *get_track_info_array_by_id - Óëget_track_info_by_idÀàËÆ£¬Ò»´Î»ñÈ¡¶à¸öµÄ½Ó¿Ú
+ *on_receive_track_info - Ð¡»ú½ÓÊÕµ½ÁË·þÎñÆ÷·µ»ØµÄtrack infoÏûÏ¢
+ *on_receive_track_info_array - Óëon_receive_track_infoÀàËÆ£¬Ò»´Î½ÓÊÕ¶à¸öµÄ½Ó¿Ú
+ *
+ */
+void get_track_info_by_id(int track_id);
+void get_track_info_array_by_id(int *ids, int size);
+void on_receive_track_info(music_track_info_t *info);
+void on_receive_track_info_array(music_track_info_t *info, int size);
+
+
+
+/* username: ÓÃÓÚMQTT·þÎñÆ÷Á¬½ÓÐí¿ÉÑéÖ¤£¬·ÇÑéÖ¤·½Ê½Á¬½ÓÖ±½ÓÌîNULL
+ * password£ºÓÃÓÚMQTT·þÎñÆ÷Á¬½ÓÐí¿ÉÑéÖ¤£¬·ÇÑéÖ¤·½Ê½Á¬½ÓÖ±½ÓÌîNULL
+ * ×¢Òâ£ºÊÇ·ñ´«ÈëusernameºÍpasswordÐè¸ù¾ÝMQTT·þÎñÆ÷ÅäÖÃÀ´¾ö¶¨¡£
+ */
+void client_lib_open(char *srv_addr, char *id, char *username, char *password);
+void client_lib_close(void);
+void on_server_connect(void);
+void on_server_disconnect(void);
+
+
+void send_online_status(void);
+
+
+void send_current_track(int list_id, int track_id, track_type_t type);
+
+
+void send_demand_music_broadcast(int track_id);
+
+
+void send_download_success(int track_id, char *url);
+void send_download_error(int track_id, char *url);
+void send_download_full(int track_id, char *url);
+
+void send_download_state(download_state_t type, int *ids, int size);
+
+/*Ð¡»úÆäËûÏà¹Ø×´Ì¬´ð¸´*/
+void send_volume(int vol);
+void send_loop_mode(loop_mode_t mode);
+void send_play_status(play_status_t status);
+void send_play_progress(int time);
+void send_sys_info(Sys_info_t *info);
+
+/*Ð¡»ú»ñÈ¡listµÄ²Ù×÷*/
+void get_list_by_id(int list_id);
+void on_receive_list(track_list_t *list);
+
+/*Ô¤ÖÃlist²Ù×÷*/
+void send_predefine_list(track_list_t *list);
+void on_receive_predefine_list_id(char *name, int list_id);
+void send_preset_list(track_list_t *list);
+
+/*Í¬²½list²Ù×÷*/
+void send_sync_list_request(void);
+void on_receive_update_list_id(int *listIDs, int size);
+void on_receive_add_list_id(int listID, char *name);
+void on_receive_deleted_list_id(int *listIDs, int size);
+
+/*·¢ËÍ²¥·ÅÁÐ±í,Ð¡»ú½ÓÊÕµ½GetPlayTrackListIdÃüÁîºóµÄ´ð¸´*/
+void send_play_list_id(int *listIDs, int size);
+void send_voice_media_id(char *media_id);
+
+/*´ÓlistÀïÅúÁ¿Ìí¼Ó£¬É¾³ýtrackÎÄ¼þ*/
+void on_delete_track_by_id(int list_id, int *trackIDs, int size);
+void on_add_track_by_id(int list_id, int *trackIDs, int size);
+
+/*OTA ²Ù×÷*/
+void on_receive_upgrade_firmware(fw_info_t *fw);
+void send_upgrade_start(void);
+void send_upgrade_stop(void);
+
+void send_change_listid(int listid);
+void send_wifi_success(void);
+
+/***********************customer extension APIs*****************************/
+
+/**
+ *DOC:
+ *	the customer-extending message should be follow these rules below:
+ *	1.it must be a JSON string
+ *	2.it should include the key-value: {"cmd" : "customer", ...}
+ */
+
+/*send_customer_message - send customer-extending message
+ *@data: message data point
+ *@length: message data length
+ */
+void send_customer_message(char *data, int length);
+
+/*on_receive_customer_message - when the lib received a customer-extending message,
+ *				this callback will be called
+ *@data: message data point
+ *@length: message data length
+ */
+void on_receive_customer_message(char *data, int length);
+
+void get_track_info_for_collector(int trackid);
+void on_receive_track_info_for_collector(int sourceId, int duration, int customerId);
+
+void send_test_result(char *result);
+void on_receive_test_mode(char *url);
+
+void on_receive_get_initial_track_list(int tracklistId);
+void on_receive_play_tracks(int *trackIds,int size);
+
+/* »ØÓ¦·þÎñÆ÷¶ËgetTracksÃüÁî£¬·µ»Ø¹ÊÊÂ»úÁÐ±íÄÚÈÝ */
+void send_tracks_list_content(int trackListId, int *trackIds, int size);
+
+#endif //__HEADER_H__
+
+* 研发会议
+** 0301
