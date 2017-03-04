@@ -86,6 +86,9 @@
    find frameworks/ packages/ bionic/ dalvik/ bootable/ libcore/ -name '*.c' -print -o -name '*.h' -print -o -name '*.cpp' -print -o -name '*.java' –print | xargs etags -a
 
 * org
+
+  http://www.cnblogs.com/Open_Source/archive/2011/07/17/2108747.html
+
   The Org Manual
   http://orgmode.org/org.html
   神器中的神器org-mode之入门篇
@@ -105,6 +108,7 @@
   C-c C-j	切换到大纲预览状态
   M-RET	插入一个同级别的标题
   M-S-RET	插入一个同级别的TODO标题
+
   M-LEFT/RIGHT	将当前标题升/降级
   M-S-LEFT/RIGHT	将子树升/降级
   M-S-UP/DOWN	将子树上/下移动
@@ -130,6 +134,12 @@ ORG-LIST-END-MARKER
      him very well from his role as Mikey Walsh in The Goonies.
 ORG-LIST-END-MARKER
 
+** 稀疏树
+
+Org 模式的一个重要的功能是能根据大纲树中选择的信息构造出稀疏的树，这样文档就可以尽可能地折叠，但是选择的信息和它对应的标题会显示出来。试下就知道它是怎样工作的了。
+Org 模式有几个命令可以创建这种树，这些命令都可以通过调度器来使用：
+C-c /	它会提示再输入一个字符来选择稀疏树的创建命令。
+C-c / r	触发后，会提示输入匹配串，并且将所有匹配的项显示成稀疏树。所有的匹配项都会高亮显示；按 C-c C-c 取消高亮。
 ** 表格
 
 #+CAPTION: 表格的标题
@@ -139,11 +149,25 @@ ORG-LIST-END-MARKER
 | 2 | two    |
 | 3 | This is a long chunk of text |
 | 4 | four   |
-C-c 竖线	创建或者转化成表格
+
+
+创建和转换
+C-c | 将活动区域（选中区域）转换成一个表。如果第一行至少有一个 TAB 字符，就用 TAB 划分内容；如果第一行都有逗号，就分逗号划分内容；否则就用空白符来划分区域。如果当前没有活动区域就会建立一个空的 Org 表格。其实用|Name|Phone|Age C-c RET 来建表会更简单一点。
 C-c C-c	调整表格，不移动光标
-TAB	移动到下一区域，必要时新建一行
-S-TAB	移动到上一区域
-RET	移动到下一行，必要时新建一行
+TAB	调整表格，将光标移到下一个区域，必要时新建一行
+S-TAB	调整表格，将光标移到上一个区域
+RET	调整表格，将光标移到下一行，必要时会新建一行
+
+编辑行和列
+M-LEFT/RIGHT	左/右移当前列
+M-S-LEFT	删除当前行
+M-S-RIGHT	在光标位置左边添加一列
+M-UP/DOWN	上/下移当前行
+M-S-UP	删除当前行
+M-S-DOWN	在当前行上面添加一行。如果有前缀，则在下面添加一行
+C-c -	在当前行下面添加一个水平线。如果带前缀，则在上面添加一行水平线
+C-c RET	在当前行下面添加一个水平线。并将光标移动到下一行
+C-c ^	将表排序。当前位置所在的列作为排序的依据。排序在距当前位置最近的两个水平线之间的行（或者整个表）中进行
 
 ** Org-Mode Reference Card (for version 7.8.11)
 ================================================================================
@@ -594,3 +618,6 @@ Dynamic Blocks
 
 update dynamic block at point                     C-c C-x C-u
 update all dynamic blocks                         C-u C-c C-x C-u
+
+
+* echo

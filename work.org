@@ -612,6 +612,96 @@ void on_receive_play_tracks(int *trackIds,int size);
 void send_tracks_list_content(int trackListId, int *trackIds, int size);
 
 #endif //__HEADER_H__
+** 百度语音
+*** key
+    :LOGBOOK:
+    :END:
+App ID: 9345458
 
-* 研发会议
-** 0301
+API Key: mG95q1G6tQNgj3HkeKTMncW1
+
+Secret Key: df6c11e2c11837c9453f21982766528b
+
+("access_token"
+ "24.38056c3ed01c466c5f60e8574be1b6aa.2592000.1491111095.282335-9345458"
+ "session_key"
+ "9mzdCPw6/Hqv7jUAHFcC0PV7eQffG2TPRzOTaQpQsmZ9o8HL28vlp5fdQivsGEhBtMIfK/k2qq2gKq3k1lTEuNVRcfl8"
+ "scope"
+ "public audio_voice_assistant_get audio_tts_post wise_adapt lebo_resource_base lightservice_public hetu_basic lightcms_map_poi kaidian_kaidian wangrantest_test wangrantest_test1 bnstest_test1 bnstest_test2 ApsMisTest_Test权限 vis-classify_flower"
+ "refresh_token"
+ "25.adc3662ac8277f931d20a1bd9e5f10a6.315360000.1803879095.282335-9345458"
+ "session_secret" "c4f5b77109726d468d85e9bbe36b352f" "expires_in" 2592000)
+
+*** lisp code
+(let ((stream (drakma:http-request "https://openapi.baidu.com/oauth/2.0/token"
+                                   :method :post
+                                   :close nil
+                                   :want-stream t
+                                   :parameters
+                                   '(("grant_type" . "client_credentials")
+                                     ("client_id" .
+                                      "mG95q1G6tQNgj3HkeKTMncW1")
+                                     ("client_secret" .
+                                      "df6c11e2c11837c9453f21982766528b")))))
+  (setf (flexi-streams:flexi-stream-external-format stream) :utf-8)
+  (yason:parse stream :object-as :plist))
+
+
+(let ((stream (drakma:http-request "http://vop.baidu.com/server_api"
+                                   :method :post
+                                   :close nil
+                                   :want-stream t
+                                   :content #p "/Users/zhangdongfeng/Desktop/2017/3503/baidu/Baidu_Voice_RestApi_SampleCode/sample/test.pcm"
+                                   :content-type "audio/pcm;rate=8000"
+                                   :content-length 52512
+                                   :parameters
+                                   '(("cuid" . "serial987654321")
+                                     ("token" .
+                                      "24.38056c3ed01c466c5f60e8574be1b6aa.2592000.1491111095.282335-9345458")))))
+  (setf (flexi-streams:flexi-stream-external-format stream) :utf-8)
+  (yason:parse stream :object-as :plist))
+
+*** 语音接口定义
+
+语音识别接口支持 POST 方式
+目前 API 仅支持整段语音识别的模式，即需要上传整段语音进行识别
+语音数据上传方式有两种：隐示发送和显示发送
+原始语音的录音格式目前只支持评测 8k/16k 采样率 16bit 位深的单声道语音
+压缩格式支持：pcm（不压缩）、wav、opus、speex、amr
+系统支持语言种类：中文（zh）、粤语（ct）、英文（en）
+正式地址：
+
+语音上传模式
+
+语音数据直接放在 HTTP-BODY 中，控制参数以及相关统计信息通过 REST 参数传递，REST参数说明：
+| 字段名  | 数据类型 | 可需 | 描述                                                        |   |   |
+| cuid    | string   | 必填 | 用户 ID，推荐使用设备mac 地址/手机IMEI 等设备唯一性参数     |   |   |
+| token   | string   | 必填 | 开发者身份验证密钥                                          |   |   |
+| lan     | string   | 选填 | 语种选择，中文=zh、粤语=ct、英文=en，不区分大小写，默认中文 |   |   |
+| offset  | int      | 必填 | 语音片段在本次识别中的偏移                                  |   |   |
+| is_last | boolean  | 必填 | 当前语音片段是否是最后一段                                  |   |   |
+
+
+语音数据的采样率和压缩格式在 HTTP-HEADER 里的 content-type 表明，例：
+
+Content-Type:audio/amr;rate=8000
+Content-length 请填写语音片段长度。
+
+
+下行接口定义
+返回的结果，采用 JSON 格式封装，如果识别成功，识别结果放在 JSON的“result”字段中，统一采用 utf-8 方式编码。
+
+| 字段名  | 数据类型 | 可需 | 描述                   |
+| err_no  | int      | 必填 | 错误码                 |
+| err_msg | string   | 必填 | 必填错误码描述         |
+| result  | string   | 必填 | 识别结果               |
+| url     | string   | 必填 | 百科问答的结果音频文件 |
+
+string 类型utf-8 编码
+
+错误码解释
+| 错误码 | 含义               |
+|   3300 | 输入参数不正确     |
+|   3301 | 识别错误           |
+|   3302 | 验证失败           |
+|   3303 | 语音服务器后端问题 |
