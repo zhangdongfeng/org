@@ -1,0 +1,47 @@
+#+LATEX_HEADER: \usepackage{xeCJK}
+#+LATEX_HEADER: \setCJKmainfont{FangSong}
+#+OPTIONS: \n:t
+
+
+* 语音接口定义
+
++ 语音识别接口支持 POST 方式
++ 需要支持片段语音识别的模式，整段语音可以分成多个片段上传进行识别
++ 原始语音的录音格式目前只支持  8k/16k 采样率 16bit 位深的单声道语音
++ 压缩格式支持：pcm（不压缩）、wav、opus、speex、amr
++ 系统支持语言种类：中文（zh）
+
+** 语音上传模式
+
+语音数据直接放在 HTTP-BODY 中，控制参数以及相关统计信息通过 REST 参数传递，REST参数说明：
+| 字段名  | 数据类型 | 可需 | 描述                                                        |   |   |
+| cuid    | string   | 必填 | 用户 ID，推荐使用设备mac 地址/手机IMEI 等设备唯一性参数     |   |   |
+| token   | string   | 必填 | 开发者身份验证密钥                                          |   |   |
+| lan     | string   | 选填 | 语种选择，中文=zh，不区分大小写，默认中文 |   |   |
+| offset  | int      | 必填 | 语音片段在本次识别中的偏移                                  |   |   |
+| is_last | boolean  | 必填 | 当前语音片段是否是最后一段                                  |   |   |
+
+
+语音数据的采样率和压缩格式在 HTTP-HEADER 里的 content-type 表明，例：
+
+Content-Type:audio/amr;rate=8000
+Content-length 请填写语音片段长度。
+
+** 下行接口定义
+
+返回的结果，采用 JSON 格式封装，如果识别成功，识别结果放在 JSON的“result”字段中，统一采用 utf-8 方式编码。
+
+| 字段名  | 数据类型 | 可需 | 描述                   |
+| err_no  | int      | 必填 | 错误码                 |
+| err_msg | string   | 必填 | 必填错误码描述         |
+| result  | string   | 必填 | 识别结果               |
+| url     | string   | 必填 | 百科问答的结果音频文件 |
+
+string 类型utf-8 编码
+
+** 错误码解释
+| 错误码 | 含义               |
+|   3300 | 输入参数不正确     |
+|   3301 | 识别错误           |
+|   3302 | 验证失败           |
+|   3303 | 语音服务器后端问题 |
