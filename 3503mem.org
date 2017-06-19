@@ -2,31 +2,7 @@
 #+LATEX_HEADER: \setCJKmainfont{Microsoft YaHei}
 #+OPTIONS: \n:t
 * overview
-** memory_overview
-*** ram内存使用情况
-+ 总内存使用了148K， 还有差不多15k的剩余内存
-+ 各种解码格式是共用内存的，因此使用的最大内存按照最大格式计算就好 53，788
-  + acc 53,788
-  + flac 40,520
-  + wav 19,148t
-  + mp3 34,615
-  + wma 49,188
-  + amr enc  48,224
-  + sinv 43,668
-+ 系统使用内存中主要部分
-  + 系统heap 32K, 在系统heak中有10K左右的WIFI驱动buffer
-  + 网络buffer  16K
-  + 任务堆栈 14K
-  + WIFI驱动 10K
-+ 进一步压缩的话，应该可以再提供20K左右内存，算法使用的内存可以最多到75K左右
-*** nor 使用情况
-+ 目前代码占用的nor空间为 1,364,884
-+ 代码大小 559,612 主要有几部分
-  + 解码库 188K
-  + wifi驱动 138K
-  + 网络协议栈  50K
-  + 应用框架  54k
-+ rodata占用空间793,916  主要由几部分：
+
   + wifi模组的firmware代码 171,856
   + 提示音mp3文件 458,652
   + 各种解码格式的码表 97,719
@@ -51,7 +27,6 @@
 | 0xBFC37608 | .overlay.bss.enc  | amr编码内存                 | 48,224    |
 | 0xBFC37608 | .overlay.bss.sinv | 声波配对内存                | 43,668    |
 
-
 *** 按模块划分的内存情况
 | 模块             | 描述       | data大小 | 代码大小 |
 |------------------+------------+----------+----------|
@@ -65,6 +40,28 @@
 | samples/storyapp | 故事机应用 | 288      | 27,932   |
 | fs               | 文件系统   | 654      | 12,908   |
 
+
+|addr|contents|size|
+|------------------
+|0xBF000000|LOAD              |1,771,656|
+|0xBF000000|text              |764,344|
+|0xBF0BAB70|rodata            |1,006,872|
+|0xBFC20000|LOAD              |7,304|
+|0xBFC20000|datas             |4,696|
+|0xBFC21C88|LOAD              |384,552|
+|0xBFC21C88|bss               |52,708|
+|0xBFC2EA70|noinit            |41,640|
+|0xBFC38D18|.overlay.bss.sinv |22,548|
+|0xBFC38D18|.overlay.bss.aac  |50,712|
+|0xBFC38D18|.overlay.bss.ape  |17,916|
+|0xBFC38D18|.overlay.bss.flac |41,044|
+|0xBFC38D18|.overlay.bss.amr  |5,396|
+|0xBFC38D18|.overlay.bss.wav  |19,688|
+|0xBFC38D18|.overlay.bss.mp3  |36,660|
+|0xBFC38D18|.overlay.bss.wma  |40,984|
+|0xBFC38D18|.overlay.bss.enc  |48,224|
+|0xBFC3E52C|.overlay.bss.btdrv|7,028|
+|0xBFC400A0|LOAD              |12,960|
 * modules details
 ** code
 *** wifi/host
