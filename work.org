@@ -168,8 +168,202 @@ robert说法是亚马逊用的算法资源太多，之前是2.5个a53。现在�
 
 
 昨天CEVA的人过来演示多mic效果，是在灿芯在SMIC55做的500MHz的TL410(我们之前的TL421的速度受限于SRAM,实现部分应该有空间，待论证)芯片上跑sensory唤醒词“hello,ceva”外加4条命令同时跑Alang 4mic远场算法，我们体验的效果不好，他们解释是TL410的性能不够。另外CEVA内部有开发X2的4MIC算法，今年Q3出来，可以提供给X2客户使用。另外一个信息是alibaba一家全资子公司正在做X2的IC，目标是6MIC,今年Q4 IC出来，另外Alibaba合作一家开了TL421的一颗，预计Q3 IC出来，也是6MIC,其他老赵帮忙补充吧
+*** 0622 CEVA
+1. alibaba使用的X2是他和C-sky合资的公司在做的，目标6~8MIC，MCU可能就是中天的802
+2. allwinner使用SDT评估，C直接编译的话效果A7和X2基本一样，后来调用CEVA优化库优势就体现出来了，他们评估6MIC的语音前处理需要X2运行400MHz，当前CEVA与他们说接受协助优化，可以再优化20~30%。
+3. amazon使用X2：芯片提供是DSPG（正在研发），算法使用了双核X2，频率是800MHz，对应的算法用ARM的CPU需要跑3~4GHz，还有额外的一个X2用于低功耗设计。
+4. 微纳感知评估的一个数据是ARM A9运行 1GHz的跑的算法，他们评估TL421 350MHz可以完成。他们的ADC外包用的是dophin的IP。
+5.
 ** 耳朵IC
 [[mu4e:msgid:DB7FD3E3699F5F46AC82EDB1899F131102791BFF@srv-mail-02.actions.com.cn][RE: 关于“耳朵”SOC IC的立项准备工作]]
+[[mu4e:msgid:DB7FD3E3699F5F46AC82EDB1899F131102791CCA@srv-mail-02.actions.com.cn][RE: CEVA X2评估]]
+[[mu4e:msgid:DB7FD3E3699F5F46AC82EDB1899F131102791D19@srv-mail-02.actions.com.cn][耳朵SOC的DSP选型评估]]
+[[mu4e:msgid:DB7FD3E3699F5F46AC82EDB1899F131102791D13@srv-mail-02.actions.com.cn][转发: TL420&TL421&X2的信息]]
+[[mu4e:msgid:2FF4B6792E0FC64E87AA66610E97F74906329E0E@srv-mail-02.actions.com.cn][X2 license]]
+[[mu4e:msgid:DB7FD3E3699F5F46AC82EDB1899F131102791CEC@srv-mail-02.actions.com.cn][FW: TL420&TL421&X2的信息]]
+*** CEVA X2
+**** CEVA-X2 Block Diagram
+***** Program Control Unit
+The Program Control Unit (PCU) is divided into three sub-units: the Dispatcher, the Interrupt handler, and the Program Sequencer.
+The Dispatcher aligns the instructions from the program memory and dispatches them to the different units. It includes an instruction queue and manages 16-bit and 32-bit instruction alignment.
+The interrupt handler handles incoming interrupts, and changes the program counter accordingly.
+The Program Sequencer ensures proper program flow, whether sequential or non-sequential. It manages the Program Counter (PC) and has various mechanisms for different types of noncontinuous instructions:
+• Branch Mechanism: Manages all branches, subroutine calls, and subroutine return operations
+• Branch Target Buffer (BTB): Minimizes the penalty for change of flow execution
+• Branch Prediction Mechanism: Predicts the target address to minimize the penalty
+of branches and changes of flow
+• Exception Handling: Manages all software/hardware interrupts and resets acceptance
+***** Scalar Processing Unit
+The Scalar Processing Unit (SPU) handles all of the scalar computations and bit- manipulation operations, and provides efficient OOB C-compiler support for both control and DSP-oriented operations. The SPU consists of two separate computational sub-units named SPUx. The sub-units are independent and can execute instructions in parallel to other sub-units
+***** Load and Store Unit
+The Load and Store Unit (LSU) is responsible for all data memory accesses. The unit is divided into two sub-units, the LS0 and LS1, which are capable of loading and storing from/ to the data memory using various addressing modes.
+The LSU supports a load bandwidth of up to 128 bits per cycle and, in parallel, supports a store bandwidth of up to 128 bits per cycle
+The LSU generates two independent 32-bit addresses in each cycle, according to the following addressing modes:
+• Indirect addressing, including post-modification
+• Indexed, using a base register and an immediate value or a pointer, including post-modification
+• Direct, fully embedded in the instruction (long direct)
+• Stack, using a Stack Pointer (SP) register for pushing and popping to/from the software stack
+**** Memory Subsystem
+The CEVA-X2 Memory Subsystem (MSS) is an extended system that can be easily adapted for full SoC integration. The MSS consists of the following:
+• Program Memory Subsystem (PMSS): Contains an optional L1 program memory and four-way cache
+• Data Memory Subsystem (DMSS): Contains L1 data memory and an optional cache
+
+While the core accesses the L1 memories and cache with no wait-states, accessing the
+external memories may require several wait-states.
+
+The CEVA-X2 supports up to 4 GB of memory space, and has up to eight separate physical interfaces (up to seven for data memory and one for program memory). This enables the core to simultaneously access both the program and data memories in parallel with Tightly Coupled Extensions (TCE). The MSS provides the core with simultaneous accesses to one instruction fetch stream and one data fetch stream. The PCU accesses the program memory, and the LSU accesses the data memory.
+
+The MSS contains standard interfaces for connecting the core to external devices and/or peripherals. These interfaces include three AXI master ports for data and one AXI master port for program, four optional AXI slave ports for external masters, a hardware accelerator connection to the data memory, and an APB3 port. All of the ports are fully compliant with Advanced Microcontroller Bus Architecture (AMBA).
+
+The CEVA-X2 supports 4 GB of data memory space and 4 GB of program memory space. Up to two 32-bit data addresses can be issued in every cycle to the data memory, as well as a single 32-bit program address to the program memory.
+
+Program memory access is always aligned as a single 128-bit line (fetch-line). The fetch-line is fetched only when it is required by the PCU. Because the Dispatcher in the PCU is responsible for aligning them, instructions within the program memory are not aligned.
+
+The CEVA-X2 DMSS uses Data DMA (DDMA) to transfer data between the local memory and an external memory, without interfering with core execution. In addition, the DMSS implements a special DMA Queue manager (QMAN) mechanism that enables the user to activate the DDMA without core intervention and without having to use real-time software.
+**** Register File
+The CEVA-X2 contains a General Register File (GRF) that consists of 32 32-bit registers. The registers are referred to as r0 through 63
+
+The Predicate Register File (PRF) consists of the scalar predicate registers, which are used for scalar operations and load/store operations. Each predicate can be used as a multiple predicate for SIMD load/store and for SIMD operations to conditionally mask individual SIMD operations.
+The CEVA-X2 includes 15 dual scalar predicate registers marked as prX.b(2). Each predicate register is a dual bit, and can be used for conditional execution of instructions.
+
+The Address Register File (ARF) consists of a stack pointer, modulo registers, and step registers
+
+The System Register File (SRF) consists of registers that control the program execution (for example, of the Program Counter (PC)) and return registers from subroutines and interrupts (retreg, retregi, and retregn). These registers are primarily used by the PCU.
+**** Scalar Processing Unit
+The Scalar Processing Unit (SPU) consists of two independent units named SPUx. The functional units perform independent operations in parallel, each according to the specific instruction within the instruction packet.
+Each SPU instruction within the instruction packet can be independently conditional, based on one of 15 predicate registers. For single instruction multiple data (SIMD) type instructions, each operation can be masked separately (for more details, see Section 4.4).
+The SPUs incorporate three execution stages. As a result, various instructions take a different number of cycles to execute. The number of stages an instruction requires for execution determines the cycle penalty before the result can be used by another instruction.
+**** Load and Store Unit
+The Load and Store Unit (LSU) does the following:
+• Generates the address for the data
+• Performs the data memory load and store operations
+• Unpacks and packs the loaded and stored data
+• Writes/reads it to/from the internal registers of the processor
+The LSU includes two load and store units named LS0 and LS1. LS0 is used for loading data from the memory, and LS1 is used for storing data into the memory.
+The LS0 and LS1 units support the following main mechanisms:
+• Linear address generation of a 32-bit address according to one of the addressing modes. The address points to a byte location in the data memory space.
+• Read bandwidth is 128 and write bandwidth is 128 bits for the SPU, LSU, and PCU units. This enables both the LS0 and LS1 to read and write their maximum bandwidth with byte alignment.
+• Two types of address register modifications are available: linear modification and modulo modification. Each LSU can modify the general registers or the stack pointer.
+
+The LS0 and LS1 units are connected to a common General Register File (GRF). The GRF contains 32-bit registers, general registers, step registers, and a stack-pointer register.
+
+The LSU includes three mode registers that control the behavior of the post-modification and address-generation mechanisms.
+All of the LSU instructions can be conditional using one of the predicate registers. The SPU contains dedicated instructions that can affect the predicate registers. In addition, dual short (S2) type load and store instructions can be predicated using the dual predicates to mask the load and store operations. This enables the LSU to load and store only part of the dual short according to the dual predicates.
+**** Memory Accesses
+***** Unaligned Memory Access
+Unaligned data memory access is fully supported by the hardware without any core stall cycles. The ability to support aligned and unaligned accesses without penalty can have the advantage of fewer instructions, which leads to increased core performance and reduced code size.
+***** LSU Operations
+The LSU can manipulate the loaded and stored data types. In load operations, the LSU can read one data element from memory, change the element type, and then write it to the processor register. In store operations, the LSU can read the data element from the processor register, change the element type, and then store it to memory.
+***** Read-after-Write Sequence
+The write buffer adds latency to the write transactions; however, it must be transparent to the core read transactions. An address-match mechanism enables stalling the core reading data that is not yet written to memory.
+**** Program Control Unit
+***** Introduction
+The Program Control Unit (PCU) handles the program memory interface, the alignment of instruction packets from the program memory, the dispatching of instructions to the various functional units, and the execution flow of instruction packets in the core.
+Dedicated mechanisms in the PCU support both sequential and non-sequential instruction flows. The latter occurs due to branches and interrupts.
+***** Instruction Dispatcher
+The encoding scheme of the core is VLIW. This implies that an instruction packet is comprised of one or several instructions, where each instruction is associated with one of the core’s functional units. Each instruction occupies one slot in the instruction packet.
+The instruction dispatcher identifies the instructions that form the instruction packet, and then issues each instruction to the functional unit(s) with which it is associated.
+****** Alignment Unit
+The Alignment unit identifies the instruction packet, and then loads it to the instruction register.
+The instruction packet opcodes that are fetched from the program memory are stored in a temporary buffer, called the instruction queue
+During sequential operations, the Alignment unit selects a group of 32 bits from the queue. The number of double-words (DWs) selected is determined by the fetch-line width, which is either four or eight DWs.
+****** Dispatch Unit
+The Dispatch unit issues all of the instructions that have to be executed in the current cycle (that is, the instruction packet) to the appropriate functional units. Immediate extension indications are also issued to the functional units by the Dispatch unit.
+The input to the Dispatch unit is the instruction register, which is loaded by the alignment unit.
+***** Program Sequencer
+The Program Sequencer controls the fetching of instruction packets from the program memory, as well as all of the aspects of sequential and non-sequential instruction flows in the core.
+The following elements form the Program Sequencer:
+• Instruction Fetch Unit (IFU)
+• Instruction decoder (for PCU instructions)
+• Branch mechanism
+• Branch target buffer mechanism (BTB)
+• Interrupt handler
+****** Instruction Fetch Unit
+During each instruction fetch, four or eight consecutive DWs (core-type dependent) are fetched from the program memory: the DW at the current address, and seven (three) additional DWs from the addresses that immediately follow. The set of fetched DWs is called a fetch-line and its width is 128/256 bits.
+The first address of the fetch-line must be a multiple of the fetch width. Instruction packet addresses can point to any word address within the fetch-line. Because the shortest instruction packet can be a word (two bytes), byte-address resolution is not needed for program memory addressing, which means that the LSB of the instruction packet address is always cleared.
+******* Sequential Fetch Mechanism
+Sequential fetching of instruction packets is performed when the core executes a sequential block of instruction packets.
+During sequential operation, successive fetch-lines are read from memory. Each fetch-line contains one or more instruction packets.Because the number of instructions that are executed in parallel constantly varies, instruction packets are often fetched several cycles in advance (that is, ahead of the cycle during which they are needed).
+A set of four registers, called the queue, is implemented in the program sequencer. Each fetched line is loaded to one of the queue’s registers, which provides temporary storage for instruction packets that are fetched in advance of their execution. The width of the queue registers is identical to the width of the fetch-line
+
+Program memory fetches are not initiated every cycle. The fetch mechanism determines when to issue a program memory fetch, depending on the state of the queue.
+The sequential fetch mechanism ensures correct and continuous program flow, and prevents overflow in the queue. In every cycle, this mechanism decides whether to issue a new fetch. The decision is based on the following information:
+• The status of the queue (the number of valid words in the queue).
+• The number of words that the current instruction packet consumes.
+• The currently active fetches (because a fetch operation takes two cycles, the mechanism keeps track of fetches that were initiated in the two preceding cycles).
+******* Non-SequentialFetchMechanism
+A non-sequential instruction flow is an event in which the normal sequential flow of instruction packets is suspended, and an instruction packet from a different address is fetched. The non-sequential fetch mechanism generates all of the non-sequential addresses.
+****** Program Sequencer Register Access
+The set of directly accessible Program Sequencer registers is referred to as the Sequencer Register File (SRF).
+****** Branch Mechanism
+The target address of a branch-type instruction can be specified in the following ways:
+• An absolute address encoded within the instruction opcode
+• A relative offset (relative to the address of the branch instruction), encoded within the instruction opcode
+• An absolute address specified within a GRF register
+• An absolute address specified within one of the return registers
+
+All of these instructions are multi-cycle. These instructions take several cycles to execute for the following reasons:
+• Fetching the opcode of the instruction packet at the target address takes two cycles.
+• The status of the condition (predicate register) is known only at a late pipeline stage.
+To minimize the cycle penalty of these instructions, the following dedicated mechanisms are implemented in the PCU:
+• Delay slots
+• Branch prediction mechanisms: either using a Branch Target Buffer (BTB),
+******* Delay Slots in Branch Instructions
+The programmer can use up to four instruction packets in delay slots in most branch instructions.
+The instruction packets in the delay slots must be composed of single-cycle instructions that do not break the pipeline. In addition, instruction packets in delay slots are non-interruptible.
+******* Branch Target Buffer(BTB)
+he BTB mechanism calculates the target address based on the current address. Its operation is done before any information is extracted from the instruction packet, and is based solely on the current fetch address and the past behavior of this fetched address. The BTB size is configurable for 128 or 256 entries.
+******* Static Branch Prediction Support
+If the taken/not-taken switch in the syntax is omitted, the default behavior for the branch instructions that are subjected to branch prediction is:
+• Not-taken when the instruction is predicated
+• Taken when no predicate is used
+
+Determining whether a certain branch is mostly taken or not-taken is generally not as straightforward as in this example. To efficiently determine the best prediction switch for every branch, a profiler utility can be run on the code, and the selection of the prediction switches can be based on these statistics.
+
+Correct prediction can reduce the cycle count of the branch by two cycles, and incorrect prediction can increase it by two cycles.
+******* Call and Return Instructions
+During the execution of a call instruction, the return address is written to an internal register, which is called retreg (return register). When a return instruction is executed, the return address is taken from the retreg register.
+******* Target Instruction Packet Alignment
+The target of a branch instruction can be located anywhere within a fetch-line, and instruction packets can cross fetch-line boundaries. If the instruction packet at the target of the branch crosses a fetch-line boundary, two lines must be fetched before execution of the instruction packet can begin.
+
+The additional single-cycle penalty can be avoided by aligning instruction packets to the fetch-line boundaries that are targets of branch instructions and originally cross a fetch-line boundary. This can be done by padding the instruction packet preceding the target instruction packet with parallel nop instructions,
+******* Exception Handling
+The core supports the following interrupts:
+• Six hardware maskable interrupts (INT0, INT1, INT2, INT3, INT4, and VINT)
+• Four software maskable interrupts (trap{t0}, trap{t1}, trap{t2}, and trap{t3})
+• One non-maskable interrupt (NMI)
+• One non-maskable software interrupt (trap)
+• One emulation software interrupt (trape)
+• Two hardware breakpoint interrupts (BI and PABP)
+******** Interrupt Latency and Non-Interruptible States
+Latency of the NMI, INT0, INT1, INT2, INT3, INT4, VINT and BI interrupts is two cycles, assuming that the core is in an interruptible state. The interrupt latency is calculated as the number of cycles between the assertion of the interrupt request and activation of the appropriate interrupt acknowledge signal.
+
+The penalty for the hardware interrupts (NMI, INT0, INT1, INT2, INT3, INT4, VINT, and BI) is five cycles, assuming that the processor is in an interruptible state. The interrupt penalty is calculated as the number of cycles in which the core does not execute any instructions.
+**** Pipeline
+The following is a description of the common stages:
+• IF: Instruction Fetch, which is divided into two sub-stages: IF1 and IF2
+• D: Dispatch/Decode, which is divided into two sub-stages: D1 and D2
+• A: Address Generation, one stage
+• M: Memory Access, one stage
+• E: Scalar Execution, which is divided into four sub-stages: E1, E2, E3, and E4
+***** Instruction Fetch Stages
+Instruction fetch execution operates over two stages, IF1 and IF2:
+• IF1: During this stage, the program address is issued by the PCU. The program address is decoded by the MSS and a memory read is initiated.
+• IF2: This stage is dedicated for program memory access. The fetch-line is registered in the instruction queue at the end of this stage. The size of the fetch-line is either 128 bits or 256 bits.
+***** Dispatch/Decode Stages
+Dispatch/decode execution operates over two stages, D1 and D2:
+• D1: The core selects a packet of 16, 32, 48, or 64 bits from the queue. This packet contains the instruction packet that is either the next instruction or a group of instructions that should be executed in parallel. At the end of this stage, the instruction packet register is loaded with the instruction packet.
+• D2: In this stage, each instruction within the instruction packet register is dispatched to the appropriate unit in the core.
+***** Address Generation Stages
+Address generation execution operates over two stages, A and M:
+• A: The core reads the relevant registers and performs address and modulo calculation and read/write strobe generation. The pointer’s post-modification value is calculated.
+• M: Address post-modification results are written to the register file and data memory is accessed. Registers are read from the register file into the SPUs.
+***** Scalar Execution Stages
+Scalar execution operates over four stages, E1, E2, E3, and E4:
+• E1: Single-stage scalar operations are executed.
+• E2: Dual-stage scalar operations (multiply) are completed.
+• E3: Accumulation is performed on MAC-type operations.
+• E4: Results are written to the register file.
 
 ** 3605D
 *** 开发
@@ -379,11 +573,20 @@ Audio playback and recording
 Basic MIDI playback
 Metadata extraction
 
-
 *** qq物联
 [[mu4e:msgid:2FF4B6792E0FC64E87AA66610E97F74906260A58@srv-mail-02.actions.com.cn][答复: 关于QQ物联SDK依赖库]]
 *** cx20810
 [[mu4e:msgid:DB7FD3E3699F5F46AC82EDB1899F131102791AB8@srv-mail-02.actions.com.cn][ATS3605 EVB对接CX20810的驱动调试]]
+*** open WRT
+[[mu4e:msgid:5EBFE11104EFEA4981C19EC8D2C2946B0453C400@srv-mail-02.actions.com.cn][openwrt_sqlite]]
+**** share lib 空间优化
+https://stackoverflow.com/questions/31354641/c-reduce-library-size-by-excluding-unnecessary-functions-programmatically
+https://stackoverflow.com/questions/8021470/how-to-optimize-size-of-shared-library
+
+***** elf
+https://docs.oracle.com/cd/E19683-01/817-3677/6mj8mbtc9/index.html#chapter6-73709
+
+
 ** as216B
 [[mu4e:msgid:DB7FD3E3699F5F46AC82EDB1899F1311027918A8@srv-mail-02.actions.com.cn][AS216B项目开发进展]]
 AS216B项目的代码已经上传到svn代码服务器：
@@ -457,23 +660,32 @@ q
 ** v700
 [[mu4e:msgid:2FF4B6792E0FC64E87AA66610E97F749062609E9@srv-mail-02.actions.com.cn][答复: 【V700】小辣椒-视频播放问题]]
 [[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD062031C81@srv-mail-02.actions.com.cn][答复: 雅士V700生产问题汇总]]
+[[mu4e:msgid:1215223C59CBD54AA38F93133AF342D503DF5EE0@srv-mail-02.actions.com.cn][答复: V700: 屏幕同比缩放显示]]
 ** S900
+[[mu4e:msgid:2FF4B6792E0FC64E87AA66610E97F749061654A7@srv-mail-02.actions.com.cn][答复: 深圳图麟科技计划采用贵公司S900系列芯片，请给予必要的技术支持]]
 *** TODO [[mu4e:msgid:5EBFE11104EFEA4981C19EC8D2C2946B0514420A@srv-mail-02.actions.com.cn][VR unity行业apk咨询]]
 [[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201AEB692@srv-mail-02.actions.com.cn][答复: S900配置PMU SGPIO端口]]
 [[mu4e:msgid:5EBFE11104EFEA4981C19EC8D2C2946B051446FE@srv-mail-02.actions.com.cn][答复: S900电量计相关问题讨论]]
+[[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201B52C78@srv-mail-02.actions.com.cn][答复: S900电量计相关问题讨论]]
+*** TODO [[mu4e:msgid:0E3AB831E505F842818BA4F9798C30A4016F275B@srv-mail-02.actions.com.cn][答复: 答复: 答复: 答复: OpenMaxIL]]
 ** S700
-** TODO [[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201B52A47@srv-mail-02.actions.com.cn][【瑞泰】【S700】【显示】 S700平台cvbsout功能需求]]
 [[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201B52AF4@srv-mail-02.actions.com.cn][答复: 【CB7】【CVBS】兼容性问题]]
 [[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201B52AAD@srv-mail-02.actions.com.cn][答复: 【瑞泰】【S700】【CVBS】客户添加cvbs导致gpu异常，系统卡死在android动画]]
 [[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201AEB59A@srv-mail-02.actions.com.cn][S700 gpu&core调频调压修改]]
+[[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201B52D9B@srv-mail-02.actions.com.cn][S700 cb6 开机进入桌面插入耳机点击触摸屏有噪音]]
+*** TODO [[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201B52A47@srv-mail-02.actions.com.cn][【瑞泰】【S700】【显示】 S700平台cvbsout功能需求]]
 *** TODO [[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201AEB3ED@srv-mail-02.actions.com.cn][答复: 答复: 【众联科技】【S700】【WIFI】Miracast sink不稳定问题]]
-*** TODO [[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201B52B3E@srv-mail-02.actions.com.cn][答复: s700 usb转sata上电问题patch]]
+**** TODO [[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201B52B3E@srv-mail-02.actions.com.cn][答复: s700 usb转sata上电问题patch]]
 ** S500
+[[mu4e:msgid:DC4E6E803E914F4B8AFE57F1456019F1035B7749@srv-mail-02.actions.com.cn][答复: S500&S700 HDMI热插拔分辨率]]
 [[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201B5299C@srv-mail-02.actions.com.cn][答复: 【方糖】【S500】【显示】开机logo不正常]]
 [[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201B52B84@srv-mail-02.actions.com.cn][答复: S500 领芯 台式机 插USB口的3G或4G模块上网黑屏死机]]
-
+[[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201B52F99@srv-mail-02.actions.com.cn][答复: 2603C 的A版B版的问题]]
+[[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201B52E17@srv-mail-02.actions.com.cn][【全星】【59plus】【HDMI】客户自带HDMI显示器不能点亮]]
 ** 7059
 大华案子
+[[mu4e:msgid:5EBFE11104EFEA4981C19EC8D2C2946B05145027@srv-mail-02.actions.com.cn][答复: 2603C 的A版B版的问题]]
+[[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201B52E17@srv-mail-02.actions.com.cn][【全星】【59plus】【HDMI】客户自带HDMI显示器不能点亮]]
 [[mu4e:msgid:1215223C59CBD54AA38F93133AF342D503DF5B3F@srv-mail-02.actions.com.cn][答复: 7059 - I2C 2 时钟配置无效问题]]
 [[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201AEB6E3@srv-mail-02.actions.com.cn][转发: 7059C 调试10.1寸屏MIPI屏资料]]
 [[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201B52A9E@srv-mail-02.actions.com.cn][转发: 关于7059/S500 广告机 老化视频时 视频暂停的问题 setVideoSurfaceTexture failed: -22]]
@@ -481,6 +693,10 @@ q
 ** 7051
 [[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201AEB17A@srv-mail-02.actions.com.cn][【7051】降低给视频播放预留的内存大小]]
 
+* 预研工作
+** android O
+https://www.ithome.com/html/android/309497.htm
+https://en.wikipedia.org/wiki/Android_O
 * vendor
 ** 富迪
 [[mu4e:msgid:DB7FD3E3699F5F46AC82EDB1899F131102791856@srv-mail-02.actions.com.cn][FW: 拜访富迪的出差报告]]
@@ -758,7 +974,7 @@ json实现不标准，修改了基本语义
 ** 不烧写序列号
 [[mu4e:msgid:0E3AB831E505F842818BA4F9798C30A4016F2641@srv-mail-02.actions.com.cn][转发:  关于如何避免烧写设备序列号]]
 ** 网络性能设计
-[[mu4e:msgid:2FF4B6792E0FC64E87AA66610E97F7490626097F@srv-mail-02.actions.com.cn][答复: 关于网络卡顿的设计和优化]]
+*** [[mu4e:msgid:2FF4B6792E0FC64E87AA66610E97F7490626097F@srv-mail-02.actions.com.cn][答复: 关于网络卡顿的设计和优化]]
 + 边下边播
   在有卡存在的情况下, 会在播放的时候， 同时下载到卡上， 网络性能和写卡的性能大于播放器消耗码流的速度的时候， 可以有效的避免播放卡顿
 + 网络缓冲区的零拷贝
@@ -771,9 +987,12 @@ json实现不标准，修改了基本语义
   避免网络数据包被接受的音乐数据长时间占住后， 不能及时回复响应
   同时也可以节省更多的大的网络buffer给音乐数据
 ** wifi性能分析
+
 [[mu4e:msgid:2FF4B6792E0FC64E87AA66610E97F749061D4E7F@srv-mail-02.actions.com.cn][在线播放网络影响分析]]
 [[mu4e:msgid:2FF4B6792E0FC64E87AA66610E97F74906329AB3@srv-mail-02.actions.com.cn][答复: ZS350A 发布文档准备]]
 [[mu4e:msgid:2FF4B6792E0FC64E87AA66610E97F7490632988A@srv-mail-02.actions.com.cn][ZS350A在线播放高码率卡顿情况分析]]
+cache miss
+[[mu4e:msgid:2FF4B6792E0FC64E87AA66610E97F74906329B13@srv-mail-02.actions.com.cn][答复: spi 2x mode]]
 *** 在线播放卡顿分类：
 + ap与机子之间wifi传输存在丢包，导致wifi包重传,甚至导致tcp层重传，重传导致300~700ms之间没数据传输；卡顿情况编号：1,9,10,13;
 这种情况，向南方硅谷了解，跟干扰，天线好坏有关；
@@ -789,9 +1008,6 @@ json实现不标准，修改了基本语义
 + Wifi多次重传，有时连续重传多次间隔都很小，有时重传间隔会大，看到一个第3次重传已经是400多ms之后，重传是由于发出数据包没收到ack，只要回ack，另一端收到的概率很大，主要是收不到发出的数据，跟干扰，天线好坏有关，这个现象只能说是和干扰，硬件RF性能相关，因为回ack都是硬件做的；
 + Ap发送一个数据包，多次重传后都收不到ack，就会丢掉这个包，传输下一个包，retry次数ap各不同，这个没有spec规定，测试同一个ap，都抓到两次不同的重传情况，一次在10ms秒就重传了6次，一次在400ms内才重传了3次；
 播放音乐码率：128kbps，不卡顿需要的收包频率约100ms收到一个数据包
-
-cache miss
-[[mu4e:msgid:2FF4B6792E0FC64E87AA66610E97F74906329B13@srv-mail-02.actions.com.cn][答复: spi 2x mode]]
 ** 二维码
 [[mu4e:msgid:2FF4B6792E0FC64E87AA66610E97F749061D4E25@srv-mail-02.actions.com.cn][发送电子邮件: ACTS3503011_27.jpg]]
 二维码烧写指令：storyapp set_sn ACTS3503011_27
@@ -862,7 +1078,6 @@ string 类型utf-8 编码
 
 **** asr
 (setf drakma:*header-stream* *standard-output*)
-
      (let ((stream (drakma:http-request "http://ros.roobo.net/voice/v1/asr"
                                        :method :post
                                        :close nil
@@ -9829,6 +10044,101 @@ redirected_tty_write
                             spin_unlock_irqrestore(&port->lock, flags);`
 
 * 研发会议
+
+** 半年BP会议
+*** 邝建涛
+[[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201B53353@srv-mail-02.actions.com.cn][2017 年中BP会 -- 智慧计算 ]]
+**** 上半年（1-5月）的主要工作：
+收敛S500客户，开发中项目落地，完成开发评估板CB6的开发，完善资料文档、
+外设、LINUX；
+S700开发评估板（CB7）的第一阶段开发完成；
+S700 Beta客户车机（头枕）项目启动；
+VR客户项目的落地，工程收敛，业务持续关注；
+平板保持一定出货量，7059C出货进度不如预期；
+**** 现在及下半年（6-10月）主要工作：
+S500评估板批量开始销售，业务配合方糖客户推广，承接项目，核心板开发完成，
+准备批量出货；
+S700的CB7完成批量，核心板完成开发，7月下旬开始批量销售，预计到8月底完
+成第二阶段软件开发（完善外设，文档，LINUX，论坛建设）；
+7月份S700头枕小批量，8月份车机试产；
+8月初7013小批量；
+8月底开始保持一定密度进行S700的宣传活动到年底：发布S700车机，开发板的
+推广活动，香港电子展；
+9月初开始预研S700升级安卓系统O可行性，如果可行，应在10月以前开始，可以
+适当拉长时间分阶段完成；
+9月开始S900开发评估板（CB9）第一阶段开发，预计年底前完成批量，同时完成
+文档；
+平板持续保持一定出货量，VR业务保持关注，业务关注跟进当期市场热点（如近
+期的王者荣耀游戏机S900，迷你KTV）;
+**** 年底到明年上半年：（11---）
+随着S500有一定的客户基础及技术积累，业务和方糖主导开始5206（39S、39ST）
+在特定市场或订单的清货动作，可能包括部分7059C在非平板市场出货；
+低端平板保持持续出货；
+到年底，已经完成S700/S900 基本平台的积累，工具及配套资料的准备，此时应
+该逐渐回归市场业务的角色定位及分工，加强业务客户推广；
+**** 业务
+1.经销商，核心方案商的建设，为新进客户提供技术及商务服务（保证基本生存，
+改善经营）；
+2.寻找一家有配合意愿，在不同地区有丰富客户基础，渠道能力的分销商（类似
+大联大），以我们目前AP的现状，从某类行业客户或特定市场开始会比较容易找
+到共同利益点切入；（业绩突破）
+3.重点、标杆客户的攻关；（稳步成长）
+4.从既有客户项目，产品发现可以以点带面的方向；（稳步成长）
+5.抓住当期市场热点，不一定是中长期可耕耘方向，特定订单；（意外惊喜）
+**** 市场
+1.及时发现新兴热点产品，组织内外部资源快速导入，预判是否中长期可耕耘方
+向；
+2.寻找预判传统行业可能的智能化趋势，看好方向主动提前布局；
+3.关注外围一些核心算法，应用；
+4.关注核心配套资源动态趋势；
+5.平台各主次分支的同步管理，平台的持续完善（比如DDR模板，板型，外设，
+系统）工作的规划;
+6.外围生态，论坛的建设，宣传；
+**** 工程
+1.客户FAE的支持工作；
+2.协助PM持续完善平台，同步主次分支；
+3.协助核心客户或重点项目的开发；
+4.持续提升客户服务的效率，包括支持系统，工具，开发文档优化，服务流程，
+新客户工程培训；
+5.学习，积累，自身综合能力的提升；
+**** 几个关键词：
+聚焦：我们是推平台，卖IC的，不是推方案的（至少一段时间）
+收敛：我们的平台是S700/S900
+库存：我们目前仍有一定的库存风险，需要降低盘活库存（5201:480K，
+5202:2.5M，5206:1M）
+生存：我们的首要任务是先养活自己
+**** FCST
+PAD：
+上半年：出货600K，ASP:USD2.35
+下半年：100K-150K/M，ASP:USD2.35
+AP:单位：K套
+　                    Q1   Q2    Q3    Q4
+S500/7059/V500        13   47    60    80
+ASP                   $4.2 $4.2  $4.5  $4.5
+S700/V700             2    8     10    30
+ASP                   $4.8 $4.8  $4.8  $4.8
+S900                  2    10    10    10
+ASP                   $12.5$12.5 $12.5 $12.5
+Others（39/39ST/7013）5    5     20    80
+ASP                   $2.0 $2.0  $2.0  $2.0
+Total(数量）          22   70    100   200
+Total(金额）          $99.2$370.8$483.0$789.0
+注：7013数量暂共估70K，要到8月份会相对准一些；
+**** 需要的支持：
+公司的理解支持，给予时间；
+关键节点的工程人力投入（火上浇油）；
+** 20170630：IC项目增加软件架构师
+*** 会议目的
+后续的ic项目， 需要补强软件架构评估这一个工作。主要目的如下：
++ 能够满足公司内部的标案开发需求外，
++ 也可以比较容易的支持客户的二次开发。
++ 可以比较容易的支持多种软件架构
+尽可能避免出现IC的硬件不必要的限制软件的扩展性，尽可能避免IC硬件和软件做不必要的耦合。
+*** 达成协议
++ IP需要标准化， 和保持延续性，尽可能保持接口（寄存器）的一致性，
++ 设立新的角色，软件架构师  5119 周晓磊   5118B  5116C(5120) 刘炜 5601 魏华铭
++ 软件架构师需要参见
+
 ** 20170602研发三部SRD例会报告
 #+TITLE:20170602研发三部SRD例会报告
 #+LATEX_HEADER: \usepackage{xeCJK}
@@ -10150,13 +10460,13 @@ alsa lib调试
 10. 双系统支持快速倒车， 未开始
 ** 20070301
 *** Android项目
-1	S700带起了方糖CB6版型， 发给瑞泰做车机方案第一阶段
-2	使用GS900增加96 board版型（TAG 0227）， 使用该分支和版型做后续S900推广。
-3  瑞泰第一阶段需求评估完成， 第二阶段主要工作在双系统和U盘量产。
-4  拜访了视美泰，了解多很多商显的需求， 初步看工作量比较大。
-5  Google DayDream中的APK从手机上抠出来，经过debug可以在5209上跑起来，IMG GPU的部分VR扩展还不能用，沟通中，进展较慢。
-6  Android 7.0 GMS，目前了解到的情况需要A53等Arm V8架构的cpu才可以支持TEE。 A5 A7 A9的CPU应该不能过。
-7  差异化和VR的支持工作。（Linux X11选择， HDMI IN，KODI小窗口等需求）	支持S700
++ S700带起了方糖CB6版型， 发给瑞泰做车机方案第一阶段
++ 使用GS900增加96 board版型（TAG 0227）， 使用该分支和版型做后续S900推广。
++ 瑞泰第一阶段需求评估完成， 第二阶段主要工作在双系统和U盘量产。
++ 拜访了视美泰，了解多很多商显的需求， 初步看工作量比较大。
++ Google DayDream中的APK从手机上抠出来，经过debug可以在5209上跑起来，IMG GPU的部分VR扩展还不能用，沟通中，进展较慢。
++ Android 7.0 GMS，目前了解到的情况需要A53等Arm V8架构的cpu才可以支持TEE。 A5 A7 A9的CPU应该不能过。
++ 差异化和VR的支持工作。（Linux X11选择， HDMI IN，KODI小窗口等需求）	支持S700
 支持工作
 ***  5601项目
 GL5601_FPGA方案
@@ -10235,9 +10545,13 @@ https://github.com/ofree/ramdisk
 https://github.com/ofree/linux/tree/bubblegum96-3.10
 [[mu4e:msgid:5EBFE11104EFEA4981C19EC8D2C2946B04F36FEB@srv-mail-02.actions.com.cn][这张图是linux的架构图吗？]]
 ** S700
+*** 快速倒车
+[[mu4e:msgid:5EBFE11104EFEA4981C19EC8D2C2946B05144FF2@srv-mail-02.actions.com.cn][快速倒车移植文档]]
 *** 第二阶段规格
 [[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201AEB3F5@srv-mail-02.actions.com.cn][答复: AD700A第二阶段规格讨论]]
-*** ubuntu
+*** 方糖规格
+**** TODO [[mu4e:msgid:2FF4B6792E0FC64E87AA66610E97F749061654AE@srv-mail-02.actions.com.cn][转发: 答复: CubieBoard7-S700 第二阶段协作开发]]
+*** ubuntu 环境
 [[mu4e:msgid:DC4E6E803E914F4B8AFE57F1456019F10353C339@srv-mail-02.actions.com.cn][GS700E 的ubuntu xml]]
 *** UI性能
 [[mu4e:msgid:5EBFE11104EFEA4981C19EC8D2C2946B04FA97DD@srv-mail-02.actions.com.cn][发送电子邮件: GS700D_UI_性能评估数据.xls, GS700D_UI_性能评估报告.doc]]
@@ -10347,85 +10661,124 @@ l 初步沟通准备从他们家购买单MIC和双MIC的模具作为我们标案
 *** TODO 点创车机老化 camera问题
 ** 客户需求
 *** 视美泰
-性能要求
-1.	循环视频播放相同或者不同格式视频时间需大于240小时。不卡顿，不退出，不暂停。
-2.	USB或者CSI等摄像头须预览或者录像时间大于240小时。不卡顿，不退出，不暂停。
-3.	WIFI，以太网，3G能连接上网时间大于240小时。
-4.	音视频需要支持多种视频格式和高清视频，长时间播放无黑屏和死机现象。
-5.	支持双屏同/异显示（LVDS显示界面，HDMI显示视频），播放高清视频无抖动，卡顿现象。
-6.	USB,IIC触摸屏流畅，不断点，不卡顿。
-7.	强行掉电开机后必须保证能工作的有（测试次数大于4000次）：
-1. 前置USB摄像头能正常使用；
-2. 后置USB摄像头能正常使用；
-3. SD卡分区可读写
-4. U盘分区可读写
-5. WIFI自动连接，获取IP，上网；或者能与手机直连
-6. ETH 自动连接，获取IP，上网
-7. 3G自动连接，获取IP，上网
-9. BT自动连接
-10.能进入android桌面，并不能恢复出厂设置。
-11. USB触摸屏能正常使用
-
-8.	WIFI，以太网ETH，3G数据通信保证不丢包，吞吐量足够大。（ping 192.xxx.xxx.xxx -n 102400 -l 10240）
-9.	多个视频同时播放高清视频的解码能力，性能，音视频同步。
-10.
-软件系统要求
-
-1.	软件固件同时支持1G,2G DDR的容量,无需更换固件.
-2.	开机时间5秒内需显示Logo，20S内进入Android桌面。任何原因关机须显示框等正常关机，时间在5秒内完全断电关机。HDMI与LVDS须同时显示,相差不得大于3S.
-3.	全志三个阶段Logo需要支持不同分辨率，不同屏幕旋转状态正常显示。支持更换Logo方案。
-4.	恢复出厂设置或者update升级,需要HDMI,LVDS都可以显示UI,不得黑屏.
-5.	支持截屏。需要支持0,90,180,270旋转屏后的截屏保存。
-6.	屏幕旋转模式须支持0,90,180,270旋转，包括3个阶段的logo显示,界面UI，视频等等都需要旋转。
-7.	屏幕状态栏隐藏设置，同时支持手势方式显示或者隐藏状态栏。（如华为手机荣耀6）
-8.	声音输出通道设置，可以设置自动检测和Codec，HDMI强制输出等不同通道输出。
-9.	2G，3G，4G模块需要兼容性支持。支持模拟语音与数据通信。当无3G等模块插入时，须模拟3G模块，包括手机信息等，如IMEI号码等等信息供应用使用。支持3G通话，如手机操作。
-10.	循环播放视频时，视频切换时黑屏时间少于1S。
-11.	USB外设支持：
-3G dongle，
-USB读卡器，
-USB触摸屏，
-USB摄像头：支持录像，录音。支持QQ视频通话问题。
-12.	串口外设支持（包括USB转TTL，PL2303，FT2303等）：
-POS打印机，
-读卡器等外设。
-13.	默认支持GooglePlay等APK。
-14.	摄像头APK进入前，需要支持手动选择使用前置和后置摄像头。
-15.	设置APK关于设备项目中，须加入我们特定信息：如DDR，EMMC大小，MCU版本号等等。
-16.	须支持遥控盒子功能和鼠标模式。IR至少需支持Setting里面设置，Launch，浏览器和输入法正常应用。
-17.	支持升级方式：USB升级，TF 升级卡升级，TF update.zip升级。其中TF update.zip升级能做到插入TF卡后,无需操作就直接升级了.
-18.	支持恢复出厂方式：（无论是HDMI，LVDS，VGA输出， 恢复出厂设置需要统一通知用户，包括正在进行，成功，失败信息。）
-19.	支持标准视美泰API方式。包括APK看门狗，视美泰板卡识别。
-20.	支持定时开关机，加密系统。
-21.	支持多家广告机发布系统：如实验室，星际，南翼和视展等等。
-22.	静默安装APK。
-23.	开关机指示灯定义与实现：
-24.	网络优先级设置：ETH>WIFI>3G。可在设置进行选择。
-25.	HDMI，VGA，LVDS显示下，支持调节显示亮度，对比度和饱和度等显示设置。
-26.	串口，IIC，扩展IO口，须提供接口以便支持应用层APP调用。串口支持485协议。
-27.	需要支持单/双路,6/8位RGB_LVDS输出。支持双路8位 1080P，Freq=168MHz输出。
-28.	支持双屏同/异显。（至少LVDS显示界面，HDMI显示视频,图片）。
-29.	单WIFI 8188ETV和WIFI+BT 8723BU 模块，支持双频WIFI2.4+5G，软件能自动识别。
-30.	支持TF卡/U盘进行参数配置，其中包括
-30.1	屏参设置
-30.2	屏幕旋转模式
-30.3	屏幕状态栏默认隐藏配置
-30.4	声音大小，喇叭，耳机，3G
-30.5	声音输出通道默认配置
-30.6	USB HID的VID，PID设置
-30.7	USB触摸屏原点位置
-30.8	IIC电容屏配置，IC芯片，地址，大小分辨率，原点位置（为了兼容多家IIC触摸不造成软件分支）
-30.9	WIFI AP默认名称和密码配置
-30.10    遥控器机器码厂家配置
-30.11    3G模块名称配置。（为了兼容多家3G模块不造成软件分支）
-30.12    是否支持3G模块选择。（为了支持多串口，兼容USB转TTL，PL2303，FT2303等）
-30.13    调试背光频率，相位和默认背光强度。
-31.	一键恢复出厂设置。
-32.	支持TF卡/U盘OTA完整固件升级。
-33.	Bootlogo 支持动态更改，支持旋转0 90 180 270度。
-34.	USB摄像头支持500W。
-35.	支持假待机，关闭LVDS，eDP，HDMI，VGA等显示，声音，只是系统在后台运行。
+**** 性能要求
++ 循环视频播放相同或者不同格式视频时间需大于240小时。不卡顿，不退出，不暂停。
++ USB或者CSI等摄像头须预览或者录像时间大于240小时。不卡顿，不退出，不暂停。
++ WIFI，以太网，3G能连接上网时间大于240小时。
++ 音视频需要支持多种视频格式和高清视频，长时间播放无黑屏和死机现象。
++ 支持双屏同/异显示（LVDS显示界面，HDMI显示视频），播放高清视频无抖动，卡顿现象。
++ USB,IIC触摸屏流畅，不断点，不卡顿。
++ 强行掉电开机后必须保证能工作的有（测试次数大于4000次）：
++ 前置USB摄像头能正常使用；
++ 后置USB摄像头能正常使用；
++ SD卡分区可读写
++ U盘分区可读写
++ WIFI自动连接，获取IP，上网；或者能与手机直连
++ ETH 自动连接，获取IP，上网
++ 3G自动连接，获取IP，上网
++ BT自动连接
++ 能进入android桌面，并不能恢复出厂设置。
++ USB触摸屏能正常使用
++ WIFI，以太网ETH，3G数据通信保证不丢包，吞吐量足够大。（ping 192.xxx.xxx.xxx -n 102400 -l 10240）
++ 多个视频同时播放高清视频的解码能力，性能，音视频同步。
+**** 软件系统要求
++ 软件固件同时支持1G,2G DDR的容量,无需更换固件.
++ 开机时间5秒内需显示Logo，20S内进入Android桌面。任何原因关机须显示框等正常关机，时间在5秒内完全断电关机。HDMI与LVDS须同时显示,相差不得大于3S.
++ 全志三个阶段Logo需要支持不同分辨率，不同屏幕旋转状态正常显示。支持更换Logo方案。
++ 恢复出厂设置或者update升级,需要HDMI,LVDS都可以显示UI,不得黑屏.
++ 支持截屏。需要支持0,90,180,270旋转屏后的截屏保存。
++ 屏幕旋转模式须支持0,90,180,270旋转，包括3个阶段的logo显示,界面UI，视频等等都需要旋转。
++ 屏幕状态栏隐藏设置，同时支持手势方式显示或者隐藏状态栏。（如华为手机荣耀6）
++ 声音输出通道设置，可以设置自动检测和Codec，HDMI强制输出等不同通道输出。
++ 2G，3G，4G模块需要兼容性支持。支持模拟语音与数据通信。当无3G等模块插入时，须模拟3G模块，包括手机信息等，如IMEI号码等等信息供应用使用。支持3G通话，如手机操作。
++ 循环播放视频时，视频切换时黑屏时间少于1S。
++ USB外设支持：
+  3G dongle，
+  USB读卡器，
+  USB触摸屏，
+  USB摄像头：支持录像，录音。支持QQ视频通话问题。
++ 串口外设支持（包括USB转TTL，PL2303，FT2303等）
+  POS打印机，
+  读卡器等外设。
++ 默认支持GooglePlay等APK。
++ 摄像头APK进入前，需要支持手动选择使用前置和后置摄像头。
++ 设置APK关于设备项目中，须加入我们特定信息：如DDR，EMMC大小，MCU版本号等等。
++ 须支持遥控盒子功能和鼠标模式。IR至少需支持Setting里面设置，Launch，浏览器和输入法正常应用。
++ 支持升级方式：USB升级，TF 升级卡升级，TF update.zip升级。其中TF update.zip升级能做到插入TF卡后,无需操作就直接升级了.
++ 支持恢复出厂方式：（无论是HDMI，LVDS，VGA输出， 恢复出厂设置需要统一通知用户，包括正在进行，成功，失败信息。）
++ 支持标准视美泰API方式。包括APK看门狗，视美泰板卡识别。
++ 支持定时开关机，加密系统。
++ 支持多家广告机发布系统：如实验室，星际，南翼和视展等等。
++ 静默安装APK。
++ 开关机指示灯定义与实现：
++ 网络优先级设置：ETH>WIFI>3G。可在设置进行选择。
++ HDMI，VGA，LVDS显示下，支持调节显示亮度，对比度和饱和度等显示设置。
++ 串口，IIC，扩展IO口，须提供接口以便支持应用层APP调用。串口支持485协议。
++ 需要支持单/双路,6/8位RGB_LVDS输出。支持双路8位 1080P，Freq=168MHz输出。
++ 支持双屏同/异显。（至少LVDS显示界面，HDMI显示视频,图片）。
++ 单WIFI 8188ETV和WIFI+BT 8723BU 模块，支持双频WIFI2.4+5G，软件能自动识别。
++ 支持TF卡/U盘进行参数配置，其中包括
+  + 屏参设置
+  + 屏幕旋转模式
+  + 屏幕状态栏默认隐藏配置
+  + 声音大小，喇叭，耳机，3G
+  + 声音输出通道默认配置
+  + USB HID的VID，PID设置
+  + USB触摸屏原点位置
+  + IIC电容屏配置，IC芯片，地址，大小分辨率，原点位置（为了兼容多家IIC触摸不造成软件分支）
+  + WIFI AP默认名称和密码配置
+  + 遥控器机器码厂家配置
+  + 3G模块名称配置。（为了兼容多家3G模块不造成软件分支）
+  + 是否支持3G模块选择。（为了支持多串口，兼容USB转TTL，PL2303，FT2303等）
+  + 调试背光频率，相位和默认背光强度。
++ 一键恢复出厂设置。
++ 支持TF卡/U盘OTA完整固件升级。
++ Bootlogo 支持动态更改，支持旋转0 90 180 270度。
++ USB摄像头支持500W。
++ 支持假待机，关闭LVDS，eDP，HDMI，VGA等显示，声音，只是系统在后台运行。
 * doc
+** WIFI
+https://en.wikipedia.org/wiki/Wi-Fi
+
+https://en.wikipedia.org/wiki/IEEE_802.11
+
+** commn lisp
+*** slime
+https://www.common-lisp.net/project/slime/doc/html/index.html#SEC_Contents
+
+** share lib 空间优化
+https://stackoverflow.com/questions/31354641/c-reduce-library-size-by-excluding-unnecessary-functions-programmatically
+https://stackoverflow.com/questions/8021470/how-to-optimize-size-of-shared-library
+
+*** elf
+https://docs.oracle.com/cd/E19683-01/817-3677/6mj8mbtc9/index.html#chapter6-73709
+
+** LInux网站
+*** mail list
+搜素patch 得到日期
+http://www.gossamer-threads.com/lists/linux/kernel/
+通过日期+1查找archiver
+https://lkml.org/
+http://vger.kernel.org/lkml/
+*** linux actions upstreaming
+https://git.kernel.org/pub/scm/linux/kernel/git/afaerber/linux-actions.git/log/?h=v4.13/arm
+*** other
+https://git.kernel.org/cgit/
+http://kernelnewbies.org/
+http://www.tux.org/lkml/
+http://lwn.net/
+http://linux-mm.org/
+http://stackoverflow.com
+http://askubuntu.com/
+http://gmane.org  邮件列表
+http://en.wikipedia.org/wiki/Unix_philosophy
+http://blog.csdn.net/21cnbao?viewmode=contents
+http://lxr.free-electrons.com/
+http://www.linuxfromscratch.org
+https://0xax.gitbooks.io/linux-insides/content/Concepts/per-cpu.html
+linux inside book
+https://www.gitbook.com/book/0xax/linux-insides
+http://advdbg.org
 ** LInux distribution
 *** general
 https://en.wikipedia.org/wiki/Linux_distribution
@@ -10440,6 +10793,9 @@ https://git.uclibc.org/uClibc/
 http://www.kumouse.com/?p=1051
 ***** Comparison of C/POSIX standard library implementations for Linux
 http://www.etalabs.net/compare_libcs.html
+***** android
+https://en.wikipedia.org/wiki/Hybris_(software)
+
 
 **** Lightweight Linux distribution
 https://en.wikipedia.org/wiki/Lightweight_Linux_distribution
@@ -10608,17 +10964,17 @@ A display manager can run on the same computer where the user sits—starting on
 In the X Window System, the X server runs on the computer in front of the user. The X server may connect to a display manager running on another computer, starting a session which may comprise a variety of programs running on that other computer.
 
 The XDMCP protocol mandates that the X server starts autonomously and connects to the display manager. In the X Window System paradigm, the server runs on the computer providing the display and input devices. A server can connect, using the XDMCP protocol, to a display manager running on another computer, requesting it to start the session. In this case, the X server acts as a graphical telnet client while the display manager acts like a telnet server: users start programs from the computer running the display manager, while their input and output take place on the computer where the server (and the user) sits.
-******* X.Org Server
+***** X.Org Server
 https://en.wikipedia.org/wiki/X.Org_Server
 X.Org Server is the free and open source implementation of the display server for the X Window System stewarded by the X.Org Foundation.
 
 Implementations of the client side of the protocol are available e.g. in the form of Xlib and XCB.
-******** Device Independent X (DIX)[edit]
+****** Device Independent X (DIX)[edit]
 The Device Independent X (DIX) is the part of the X.Org Server that interacts with clients and implements software rendering. Basically everything in the server except for the hw/ directory. The main loop and the event delivery are part of the DIX.[6]
 An X server has a tremendous amount of functionality that must be implemented to support the X core protocol. This includes code tables, glyph rasterization and caching, XLFDs, and the entire core rendering API that draws stippled lines, polygons, wide arcs and many more state-of-the-1980s style graphics primitives.
-******** Device Dependent X (DDX)[edit]
+****** Device Dependent X (DDX)[edit]
 The Device Dependent X (DDX) is the part of the x-server that interacts with the hardware. In the X.Org Server source code, each directory under "hw" corresponds to one DDX. Hardware comprises graphics cards as well as mouse and keyboards. Each driver is hardware specific and implemented as a separate loadable module.
-********* 2D graphics driver
+******* 2D graphics driver
 For historical reasons the X.Org Server still contains graphics device drivers supporting some form of 2D rendering acceleration. In ancient times, the mode-setting was done by some x-server graphics device drivers specific to some video controller/graphics card. To this mode-setting functionality, additional support for 2D acceleration was added when such became available with various GPUs. The mode-setting functionality was moved into the DRM and is being exposed through an DRM mode-setting interface, the new approach being called "kernel mode-setting" (KMS). But the 2D rendering acceleration remained.
 
 ****** Wayland
@@ -10676,20 +11032,67 @@ Examples of the third application include Linux programs such as MPlayer, links2
 
 The now defunct DirectFB is another project aimed at providing a framework for hardware acceleration of the Linux framebuffer.
 There was also a windowing system called FramebufferUI (fbui) implemented in kernel-space that provided a basic 2D windowing experience with very little memory use.[4]
-******* Direct Rendering Infrastructure (DRI)
+
+***** Direct Rendering Manager
+https://en.wikipedia.org/wiki/Direct_Rendering_Manager
+In computing, the Direct Rendering Manager (DRM), a subsystem of the Linux kernel, interfaces with the GPUs of modern video cards. DRM exposes an API that user-space programs can use to send commands and data to the GPU, and to perform operations such as configuring the mode setting of the display. DRM was first developed as the kernel space component of the X Server's Direct Rendering Infrastructure,[1] but since then it has been used by other graphic stack alternatives such as Wayland.
+User-space programs can use the DRM API to command the GPU to do hardware-accelerated 3D rendering and video decoding as well as GPGPU computing.
+****** Direct Rendering Infrastructure (DRI)
+https://en.wikipedia.org/wiki/Direct_Rendering_Infrastructure
 The Direct Rendering Infrastructure (DRI) is a framework for allowing direct access to graphics hardware under the X Window System in a safe, efficient way.[6] The main use of DRI is to provide hardware acceleration for the Mesa implementation of OpenGL. DRI has also been adapted to provide OpenGL acceleration on a framebuffer console without a display server running
 
 DRI implementation is scattered through the X Server and its associated client libraries, Mesa 3D and the Direct Rendering Manager kernel subsystem.[6] All of its source code is free software.
-******** Overview
+******* Overview
 X clients should have direct access to graphics hardware rather than relying on a third party process to do so, saving all the IPC overload. This approach is called "direct rendering" as opposed to the "indirect rendering" provided by the classical X architecture. The Direct Rendering Infrastructure was initially developed to allow any X client to perform 3D rendering using this "direct rendering" approach
 It should be noted that nothing prevents DRI from being used to implement accelerated 2D direct rendering within an X client.[3] Simply no one has had the need to do so because the 2D indirect rendering performance was good enough.
-******* Direct Rendering Manager
-https://en.wikipedia.org/wiki/Direct_Rendering_Manager
 
+****** DMA Buffer Sharing and PRIME
+The DMA Buffer Sharing API (often abbreviated as DMA-BUF) is a Linux kernel internal API designed to provide a generic mechanism to share DMA buffers across multiple devices, possibly managed by different types of device drivers.[25][26] For example, a Video4Linux device and a graphics adapter device could share buffers through DMA-BUF to achieve zero-copy of the data of a video stream produced by the first and consumed by the latter. Any Linux device driver can implement this API as exporter, as user (consumer) or both.
+****** Hardware overlay
+https://en.wikipedia.org/wiki/Hardware_overlay
+****** Chroma key
+https://en.wikipedia.org/wiki/Chroma_key
+****** X video extension
+https://en.wikipedia.org/wiki/X_video_extension
+The video controller has to provide the required functions.
+The device driver software for the video controller and the X display server program have to implement the XVideo interface.
+The video playback software has to make use of this interface.
+Most modern video controllers provide the functions required for XVideo; this feature is known as hardware scaling and YUV acceleration or sometimes as 2D hardware acceleration.
+
+Video playback programs that run under the X Window system, such as MPlayer, MythTV or xine, typically have an option to enable XVideo output. It is very advisable to switch on this option if the system GPU video-hardware and device drivers supports XVideo and more modern rendering systems such as OpenGL and VDPAU are unavailable – the speedup is very noticeable even on a fast CPU.
+****** Multiple buffering
+https://en.wikipedia.org/wiki/Multiple_buffering#Page_flipping
+****** Swap Chain
+https://en.wikipedia.org/wiki/Swap_Chain
+In computer graphics, a swap chain is a series of virtual framebuffers utilized by the graphics card and graphics API for frame rate stabilization and several other functions. The swap chain usually exists in graphics memory, but it can exist in system memory as well. The non-utilization of a swap chain may result in stuttering rendering, but its existence and utilization are required by many graphics APIs. A swap chain with two buffers is a double buffer.
+
+In every swap chain there are at least two buffers. The first framebuffer, the screenbuffer, is the buffer that is rendered to the output of the video card. The remaining buffers are known as backbuffers. Each time a new frame is displayed, the first backbuffer in the swap chain takes the place of the screenbuffer, this is called presentation or swapping. A variety of other actions may be taken on the previous screenbuffer and other backbuffers (if they exist). The screenbuffer may be simply overwritten or returned to the back of the swap chain for further processing. The action taken is decided by the client application and is API dependent.
 
 ***** Free and open-source graphics device driver
 https://en.wikipedia.org/wiki/Free_and_open-source_graphics_device_driver
+The free and open-source drivers are primarily developed on Linux and for Linux. They have been under constant development by the Linux kernel developers, by 3rd party programming enthusiasts and also by employees of companies such as e.g.AMD. Each driver is composed out of five parts:
 
++ Linux kernel component DRM
++ Linux kernel component KMS driver: basically the device driver for the display controller
++ user-space component libDRM: a wrapper library for the system calls of the DRM, should only be used by Mesa 3D
++ user-space component in Mesa 3D: this component is highly hardware specific, is being executed on the CPU and does the translation of e.g. OpenGL commands into machine code for the GPU;
+because of the split nature of the device driver, marshalling is possible;
+Mesa 3D is the only available free and open-source implementation of OpenGL, OpenGL ES, OpenVG, GLX, EGL and OpenCL
+as of July 2014 most of these components are written conforming to the Gallium3D-specifications;
+there is a fully functional State Tracker for Direct3D version 9 written in C and an un-maintained one for Direct3D versions 10 and 11 written in C++.[19]
++ Device Dependent X (DDX), an additional special and distinct 2D graphics device driver extra for X.Org Server (Which is going to be replaced by Glamor)
+
+****** ARM[edit]
+See also: Mali
+ARM Holdings is a fabless semiconductor company which licenses SIP cores. They are known for the licensing the ARM instruction set and CPUs based upon it but they also develop and license the Mali series of GPUs. On January 21, 2012, Phoronix reported that Luc Verhaegen was driving a reverse-engineering attempt aimed at the ARM Holdings Mali series of GPUs, specifically the Mali-200 and Mali-400 versions. The reverse-engineering project, called lima, was presented at FOSDEM, February 4, 2012.[34][35] On February 2, 2013, Verhaegen demonstrated Quake III Arena in timedemo mode, running on top of the Lima driver.[36]
+
+ARM has shown no intention of providing support for their graphics acceleration hardware licensed under some free and open-source license. But in December 2015 and April 2016 ARM employees did send patches for the Linux kernel to support at least their display controller SIP blocks "ARM HDLCD display controller" and Mali DP500, DP550 and DP650.[37][38]
+
+****** Imagination Technologies[edit]
+See also: PowerVR
+Imagination Technologies is a fabless semiconductor company that develops and licenses semiconductor intellectual property cores, among which are the PowerVR GPUs. Intel has manufactured a number of PowerVR based GPUs. PowerVR GPUs are widely used in mobile SoCs. Imagination Technologies does not provide a FOSS driver or any public documentation for the PowerVR. Due to its wide use in embedded devices, the Free Software Foundation has put reverse-engineering of the PowerVR driver on a high-priority project list.[39]
+
+PowerVR reverse engineering project
 **** RPM Package Manager
 https://en.wikipedia.org/wiki/RPM_Package_Manager
 **** Software repository
@@ -10896,8 +11299,6 @@ https://github.com/cisco/chezscheme
                          (as:exit-event-loop))))
 
 (as:start-event-loop #'my-echo-server)
-
-
 
 (ql:quickload :cl-async)
 
@@ -11124,6 +11525,9 @@ http://kitchingroup.cheme.cmu.edu/blog/category/orgmode/
 
 http://orgmode.org/worg/org-contrib/org-mime.html
 ** Emacs编辑器——王垠
+*** regexp
+http://ergoemacs.org/emacs/emacs_regex.html
+*** intro
   http://blog.csdn.net/superwen_go/article/details/8235185
   有哪些是必备的emacs扩展？
   https://www.zhihu.com/question/21943533
@@ -11442,7 +11846,6 @@ Hi吴升：
 [[mu4e:msgid:2FF4B6792E0FC64E87AA66610E97F74906260921@srv-mail-02.actions.com.cn][关于5118 的内存空间！]]
 [[mu4e:msgid:2FF4B6792E0FC64E87AA66610E97F74906260B6A@srv-mail-02.actions.com.cn][答复: GL5118B 蓝牙固化代码调整相关讨论]]
 * misc
-
 https://mail.actions-semi.com/exchange/
 ** samba win7 访问问题
 [[mu4e:msgid:5EBFE11104EFEA4981C19EC8D2C2946B04FAA450@srv-mail-02.actions.com.cn][答复: 一个服务器访问的问题！]]
@@ -11481,6 +11884,11 @@ ACTZH-PAD-FW1 ActsFW2010
 ACTZH-PAD-GMS2 201601@GMS
 ACTZH-PAD-PMD PMD123456
 Guest WIFI：actSguesT201601
+ssid="ACTZH-PAD-GMS2"   psk="201601@GMS"
+ssid="ACTZH-PAD-PMD"    psk="PMD123456"
+ssid="ACTZH-PAD-GMS1"   psk="Gms@2016"
+ssid="ACTZH-PAD-FW1"   psk="ActsFW2010"
+ssid="ACTZH-PAD-FW2"   psk="Actspa@2016"
 ** priv
 *** 身份证
 张江帆 410711200607043059
