@@ -10575,7 +10575,66 @@ A2DP的例子实现了一个demo，通过蓝牙建立一个a2dp的链接，实�
     | WICED-HID-Device-Library.pdf                              | BLE HID的实现                                               |
     | WICED-SPI-Implementation.pdf                              | 通过spi做hci controller                                     |
     | WICED-Secure-Over-the-Air-Firmware-Upgrade.pdf            | OTA固件升级                                                 |
+
 *** zephyr + IVT
+**** A2DP sink例子的分析
+***** 简述
+A2DP的例子实现了一个demo，通过蓝牙建立一个a2dp的链接, 播放完整的sbc或aac解码
+***** 相关各层接口
+
+|               | module name      |  api |
+| bt app        |                  |     |
+| bt驱动os的移植层    | actions/btdrv/   |   |
+|基于ivt的应用逻辑     | actions/btmgr/   |   |
+|bt stack的移植层   | actions/btstack/ |   |
+| core profiles |                  |   |
+|               | gap_             |   |
+|               | l2cap_           |   |
+|               | sdap_            |   |
+|               | sdp              |   |
+| profiles      |                  |   |
+|               | a2dp_            |   |
+|               | avctp_           |   |
+|               | avdtp_           |   |
+|               | avrcp_           |   |
+
+***** 各模块大小
++---------------+------------------+-----------+-----------+-------------+
+|               | module name      | code size | data size | rodata size |
++---------------+------------------+-----------+-----------+-------------+
+| bt app        |                  |     17144 |      4200 |         739 |
+|               | actions/btdrv/   |     15676 |        69 |         712 |
+|               | actions/btmgr/   |     12820 |      4127 |          27 |
+|               | actions/btstack/ |      2348 |         4 |           0 |
++---------------+------------------+-----------+-----------+-------------+
+| baseband      |                  |    285960 |      7118 |        5458 |
+|               | core/lc/         |     65840 |      3112 |          16 |
+|               | core/hc/         |     15104 |        28 |         680 |
+|               | core/hw_rf/      |     30652 |       514 |        2144 |
+|               | core/hw/         |      1212 |         0 |           0 |
+|               | core/le/         |     44368 |       683 |          13 |
+|               | core/lmp/        |     99688 |      1783 |        1585 |
+|               | core/sys/        |      2716 |       902 |        1020 |
+|               | core/bt          |      4232 |        30 |           0 |
+|               | core/tc/         |     10182 |         0 |           0 |
+|               | core/hcit/       |      2734 |         9 |           0 |
+|               | core/transport/  |      9232 |        57 |           0 |
++---------------+------------------+-----------+-----------+-------------+
+| core profiles |                  |     67416 |       159 |        1507 |
+|               | hci_             |     19370 |        16 |        1003 |
+|               | gap_             |     11136 |        44 |         144 |
+|               | l2cap_           |     21176 |         5 |         224 |
+|               | sdap_            |      6016 |        75 |           0 |
+|               | sdp              |      9718 |        19 |         136 |
++---------------+------------------+-----------+-----------+-------------+
+| profiles      |                  |     37446 |       628 |             |
+|               | a2dp_            |      1692 |         8 |           0 |
+|               | avctp_           |      3266 |         4 |           0 |
+|               | avdtp_           |      9672 |         5 |           0 |
+|               | avrcp_           |     10846 |         4 |           0 |
++---------------+------------------+-----------+-----------+-------------+
+| others        |                  |           |           |             |
+|               | others           |     11970 |       607 |           0 |
 
 *** 5118B
 **** 平台主要优势
@@ -10789,50 +10848,225 @@ wiced_audioe_sink_config_init(&p_config_data->p_param)
 wiced_audio_sink_register_data_cback( void* p_cback );
 
 *** zephyr
+  + btmgr_start(btmgr_ready_cb);
+    + err = ivtmgr_rdm_init();
+      + p_rdm = NEW(sizeof(struct ivtmgr_rdm_priv));
+      + k_delayed_work_init(&p_rdm->auto_conn_work,
+        _auto_connection_work_handler);
+      + _paired_info_restore();
+        + nvram_config_get(BTMGR_PAIRED_INFO_NVRAM_NAME,
+      + _autoconn_info_restore();
+        + nvram_config_get(BTMGR_AUTOCONN_INFO_NVRAM_NAME,
+    + err = ivtmgr_drv_init(ivtmgr_drv_rx_cb);
+      + init_con_env();
+        + init_btrom_bss ();
+        + load_func_tab();
+        + load_btrom_data();
+      + g_rx_cb = rx_cb;
+      + btc_cfg.rf_txpower_adjust = 7;
+        btc_cfg.uart_transport_en = 0;
+        btc_cfg.feature_pkg=0;
+        btc_cfg.low_freq_available = 1;
+        btc_cfg.gpio_debug_mask = 0;
+        btc_cfg.log_mask = CON_LOG_MASK_OUTPUT | CON_LOG_VIA_UART;
+        btc_cfg.is_fpga = 0;
+      + con_init(&btc_cfg);
+      + con_general_register_cbk(hci_host_buf_req_cb,
+        hci_host_buf_commit_cb,
+      + k_thread_spawn(g_schedule_loop_stack, schedule_loop_thread,
+      + k_thread_spawn(g_schedule_loop_low_stack,
+        schedule_loop_low_thread,
+    + g_ready_cb = cb;
+    + err = btstack_init();
+      + BtInit();
+      + k_thread_spawn((void *)ScheduleLoop, NULL, NULL,
+      + GAP_RegisterIndCbk(NULL, GAP_IND_ALL, gap_indicate_cb);
+      + GAP_RegisterTransportLayerA((HANDLE)&g_tl_hdl,
+        (TransportLayerStru *)&g_uart_tl_func,
+        gap_register_tl_cfm);
 
-+ btmgr_start(btmgr_ready_cb);
-  + err = ivtmgr_rdm_init();
-    + p_rdm = NEW(sizeof(struct ivtmgr_rdm_priv));
-    + k_delayed_work_init(&p_rdm->auto_conn_work,
-      _auto_connection_work_handler);
-    + _paired_info_restore();
-      + nvram_config_get(BTMGR_PAIRED_INFO_NVRAM_NAME,
-    + _autoconn_info_restore();
-      + nvram_config_get(BTMGR_AUTOCONN_INFO_NVRAM_NAME,
-  + err = ivtmgr_drv_init(ivtmgr_drv_rx_cb);
-    + init_con_env();
-    + g_rx_cb = rx_cb;
-    + btc_cfg.rf_txpower_adjust = 7;
-      btc_cfg.uart_transport_en = 0;
-      btc_cfg.feature_pkg=0;
-      btc_cfg.low_freq_available = 1;
-      btc_cfg.gpio_debug_mask = 0;
-      btc_cfg.log_mask = CON_LOG_MASK_OUTPUT | CON_LOG_VIA_UART;
-      btc_cfg.is_fpga = 0;
-    + con_init(&btc_cfg);
-    + con_general_register_cbk(hci_host_buf_req_cb,
-                                 hci_host_buf_commit_cb,
-    + k_thread_spawn(g_schedule_loop_stack,
-                      sizeof(g_schedule_loop_stack),
-                      schedule_loop_thread, NULL, NULL,
-    + k_thread_spawn(g_schedule_loop_low_stack,
-                       sizeof(g_schedule_loop_low_stack),
-                       schedule_loop_low_thread, NULL, NULL,
-  + g_ready_cb = cb;
-  + err = btstack_init();
+  static const TransportLayerStru g_uart_tl_func = {
+          uart_tl_get_type,
+          uart_tl_startup,
+          uart_tl_shutdown,
+  + uart_tl_send,
+    + ivtmgr_drv_send(data, len);
+      + pbuf = con_buf_req(ptype, NULL, data_size);
+      + memcpy(pbuf, data + (len - data_size), data_size);
+      + con_buf_commit(ptype, pbuf, data_size);
+          uart_tl_start_sco,
+          uart_tl_stop_sco,
+  };
 
-+ btmgr_ready_cb
-  + btmgr_a2dp_start(&a2dp_cbs);
-    + p_a2dp = NEW(sizeof(struct ivtmgr_a2dp_priv));
-    + in = NEW(sizeof(struct A2DP_RegCbkStru));
-    + in->media_type = A2DP_MEDIATYPE_AUDIO;
-    + in->cbk = a2dp_indicate_cb;
-    + A2DP_RegCbk(in);
-    + p_a2dp->snk_svc_hdl = A2DP_RegisterService(A2DP_TSEP_SNK, A2DP_SPEAKER);
-    + a2dp_snk_sep_register();
-  + btmgr_avrcp_start(NULL)
-  + btmgr_br_set_discoverable(true);
-  + btmgr_br_set_connnectable(true);
+  static const struct btmgr_a2dp_callbacks a2dp_cbs = {
+          .stream_opened = btplay_stream_opened,
+          .stream_closed = btplay_stream_closed,
+          .pcm_indicated = btplay_pcm_indicated,
+  };
+
+  + btmgr_ready_cb
+    + btmgr_a2dp_start(&a2dp_cbs);
+      + p_a2dp = NEW(sizeof(struct ivtmgr_a2dp_priv));
+      + p_a2dp->cbs = cbs;
+      + in = NEW(sizeof(struct A2DP_RegCbkStru));
+      + in->cbk = a2dp_indicate_cb;
+      + A2DP_RegCbk(in);
+      + p_a2dp->snk_svc_hdl = A2DP_RegisterService(A2DP_TSEP_SNK,
+        A2DP_SPEAKER);
+      + a2dp_snk_sep_register();
+        + sep = List_NodeNew(sizeof(struct A2DP_SEPStru) + len);
+        + sep->mask = AVDTP_SEPMASK_ISSNKSVC;
+          sep->media_type = (A2DP_MEDIATYPE_AUDIO << 4) | (A2DP_TSEP_SNK
+          << 3);
+                  p = sep->sc.service_capability;
+                  p[1] = A2DP_SC_MEDIA_TRANSPORT;
+                  p[2] = 0;
+                  p[3] = A2DP_SC_MEDIA_CODEC;
+                  p[4] = 6;
+                  p[5] = A2DP_MEDIATYPE_AUDIO << 4;
+                  p[6] = A2DP_CODEC_SBC;
+                  p[7] = A2DP_SBC_SF_ALL | A2DP_SBC_CHMODE_ALL; /* some
+                  phone(XT319) need support all SF. */
+                  p[8] = A2DP_SBC_BLOCK_ALL | A2DP_SBC_SUBBAND_ALL |
+                  A2DP_SBC_ALLOCATION_ALL;
+                  p[9] = 2;
+                  p[10] = CONFIG_BTMGR_A2DP_BITPOOL;
+        + A2DP_Register_SEP(sep);
+      + audioout_hdl = audio_out_device_create();
+    + btmgr_avrcp_start(NULL);
+    + btmgr_br_set_discoverable(true);
+      + GAP_SetVisualModeA((HANDLE)&g_tl_hdl, NULL, g_visual_mode,
+        NULL);
+    + btmgr_br_set_connnectable(true);
+      + GAP_SetVisualModeA((HANDLE)&g_tl_hdl, NULL, g_visual_mode,
+        NULL);
+
+  + a2dp_indicate_cb
+    + case A2DP_EV_REGSEP:
+    + a2dp_sep_registerd(param);
+    + case A2DP_EV_STREAMCREATE:
+    + a2dp_stream_created(param);
+    + case A2DP_EV_SETCONFIGURATION:
+    + a2dp_stream_setconfig(param);
+    + case A2DP_EV_OPENCODECINFO:
+    + a2dp_stream_opencodecinfo(param);
+    + case A2DP_EV_STREAMOPEN:
+    + a2dp_stream_open(param);
+    + case A2DP_EV_STREAMSTART:
+    + a2dp_stream_start(param);
+    + case A2DP_EV_DATAIND:
+    + a2dp_data_ind(param);
+      + sbc_info.input = BUFDATA(in->data);
+        sbc_info.input_len = DATASIZE(in->data);
+        sbc_info.output = NEW(512); /* TODO */
+      + audio_decoder_ops_sbc(p_a2dp->decsbc_handle,
+        SBC_CMD_FRAME_DECODE,
+        (unsigned int)&sbc_info);
+      + __pcm_data_out((uint16_t *)sbc_info.output, sbc_info.output_len
+        / 2);
+    + case A2DP_EV_STREAMSUSPEND:
+    + FREE(param);
+    + case A2DP_EV_STREAMDONE:
+    + a2dp_stream_done(param);
+
+  + gap_register_tl_cfm(HANDLE tl_hdl, UINT16 result, struct
+    GAP_RegisterTLCfmStru *cfm_par)
+    + GAP_ResetHardwareA(tl_hdl, NULL, gap_reset_hardware_cfm);
+      + gap_reset_hardware_cfm
+      + gap_start();
+        + UINT8 class_of_device[4] = {0x04, 0x04, 0x24}; /* TODO */
+        + UINT8 device_name[] = "zephyr-ivt"; /* TODO */
+        + GAP_SetLocalDeviceClassA((HANDLE)&g_tl_hdl, NULL,
+          class_of_device, NULL);
+        + GAP_SetIOCapability((UINT8)HCI_IO_CAPABILITY_NOINPUTNOOUTPUT);
+        + GAP_SetLocalNameA((HANDLE)&g_tl_hdl, NULL, device_name,
+          sizeof(device_name), gap_set_local_name_cfm);
+          + ivtmgr_rdm_auto_connection_start(true);
+            + k_delayed_work_submit(&p_rdm->auto_conn_work,
+              BTMGR_AUTOCONN_INTERVAL);
+            + _auto_connection_work_handler
+              + btmgr_a2dp_connect(false, p_rdm->auto_conn.addr);
+              + btmgr_avrcp_connect(p_rdm->auto_conn.addr);
+              +
+
+  + gap_indicate_cb
+      +switch (ind_type) {
+    + case GAP_IND_INQUIRY_COMPLETE:
+    + case GAP_IND_INQUIRY_RESULT:
+    + case GAP_IND_CONNECTION_REQUEST:
+    + case GAP_IND_CONNECTION_EVENT:
+    + rmt_dev_connection_handle(param);
+      + struct GAP_ConnectionEventStru *in = param;
+      + ivtmgr_rdm_connected(in->addr.bd);
+        + dev = _find_connected_dev(addr);
+        + dev = NEW(sizeof(struct rdm_device));
+        + memcpy(dev->bt_addr, addr, IVTMGR_BD_ADDR_LEN);
+        + sys_slist_append(&p_rdm->dev_list, &dev->node);
+    + case GAP_IND_PIN_CODE_REQ:
+    + return rmt_dev_pincode_reply(param);
+      + strcpy(reply.pin_code, CONFIG_BTMGR_DEV_FIX_PINCODE);
+      + GAP_ExecuteCommandA((HANDLE)&g_tl_hdl, NULL,
+    + case GAP_IND_LINK_KEY_NOTIFICATION:
+    + rmt_dev_link_key_created(param);
+      + ivtmgr_rdm_paired(in->remote_bd, in->link_key, in->key_type)
+      + dev = _find_connected_dev(addr);
+      + entry = _find_paired_entry_by_addr(addr);
+      + memcpy(entry->remote_addr, addr, IVTMGR_BD_ADDR_LEN);
+      + memcpy(entry->link_key, link_key, IVTMGR_LINKKEY_SIZE);
+      + _paired_info_save();
+        + nvram_config_set(BTMGR_PAIRED_INFO_NVRAM_NAME,
+          (const void *)p_rdm->paired_list,
+    + case GAP_IND_LINK_KEY_REQUEST:
+    + return rmt_dev_link_key_reply(param);
+      + struct HCI_Security_Link_Key_Request_ReplyStru cmd;
+      + ivtmgr_rdm_get_link_key(in->remote_bd, cmd.link_key,
+        &cmd.key_type)
+      + GAP_LinkKeyReply((HANDLE)&g_tl_hdl, &cmd);
+    + case GAP_IND_AUTHENTICATION_FAILURE:
+    + case GAP_IND_REMOTE_DEVICE_NAME_UPDATED:
+    + case GAP_IND_USER_CONFIRMATION_REQUEST:
+    + case GAP_IND_USER_PASSKEY_REQUEST:
+    + case GAP_IND_SIMPLE_PAIRING_COMPLETE:
+    + case GAP_IND_USER_PASSKEY_NOTIFICATION:
+    + case GAP_IND_AUTHORIZATION_REQUEST:
+    + case GAP_IND_AUTHORIZATION_ABORT:
+
+
+  + hci_host_buf_req_cb
+    + mem_malloc(len);
+
+  + hci_host_buf_commit_cb
+    + g_rx_cb(buf, len, qType);
+    + ivtmgr_drv_rx_cb
+    + k_thread_spawn(btstack_schedule_loop_stack, (void *)ScheduleLoop,
+    + GAP_RegisterIndCbk(NULL, GAP_IND_ALL, gap_indicate_cb);
+    + GAP_RegisterTransportLayerA((HANDLE)&g_tl_hdl,
+      (TransportLayerStru *)&g_uart_tl_func,
+      gap_register_tl_cfm);
+
+
+  + schedule_loop_thread
+    + con_schedule_high_loop(255);
+
+  + schedule_loop_low_thread
+    + con_schedule_low_loop(255);
+
+  + btmgr_ready_cb
+    + btmgr_a2dp_start(&a2dp_cbs);
+      + p_a2dp = NEW(sizeof(struct ivtmgr_a2dp_priv));
+      + in = NEW(sizeof(struct A2DP_RegCbkStru));
+      + in->media_type = A2DP_MEDIATYPE_AUDIO;
+      + in->cbk = a2dp_indicate_cb;
+      + A2DP_RegCbk(in);
+      + p_a2dp->snk_svc_hdl = A2DP_RegisterService(A2DP_TSEP_SNK,
+        A2DP_SPEAKER);
+      + a2dp_snk_sep_register();
+    + btmgr_avrcp_start(NULL)
+    + btmgr_br_set_discoverable(true);
+    + btmgr_br_set_connnectable(true);
+
+  + a2dp_indicate_cb
+  +
 
 ** 20170601：平台方向后续规划
 #+TITLE:  20170601：平台方向后续规划
@@ -13290,6 +13524,26 @@ ssid="ACTZH-PAD-FW2"   psk="Actspa@2016"
 张江帆 410711200607043059
 李宏 410702197902161022
 张子越 410711201103060036
+** 服务器密码
+|      服务器ip | 性质       |   hosts指向 | jdk1.8安装情况 | 密码              |
+|  192.168.4.20 | 编译服务器 | 192.168.4.3 | 已安装         | password          |
+| 192.168.4.220 | 编译服务器 | 192.168.4.3 | 已安装         | password          |
+|  192.168.4.19 | 编译服务器 | 192.168.4.3 | 已安装         | root/actions@2014 |
+|  192.168.4.28 | 编译服务器 | 192.168.4.3 | 已安装         | password          |
+|  192.168.1.27 | 编译服务器 | 192.168.4.3 | 已安装         | root/zhangdf1     |
+|  192.168.1.11 | 编译服务器 | 192.168.4.3 | 已安装         | root/actions@2011 |
+|   192.168.0.3 | 编译服务器 | 192.168.4.3 | ——             | root/actions@2011 |
+| 192.168.4.107 | 编译服务器 | 192.168.4.3 | 已安装         |                   |
+| 192.168.4.233 | 编译服务器 | 192.168.4.3 | 已安装         | password          |
+
+交接服务器信息：
+1. git代码服务器原先有两台，一台是主机（master），一台是从机（slave），后来从机改为了gerrit服务器，所以现在都是用主机下载代码。
+2. gitolite代码服务器：srv-srdgit /192.168.4.3，帐号密码：root/3392353zzh
+3. gerrit代码服务器：srv-srdgit-02 /192.168.4.4：root/3392353zzh
+4. 还有一台旧的代码服务器：fwgitsrv：root/3392353zzh
+5. 发布服务器srv-padgit-out（192.168.1.11），root/3392353zzh，
+6. jenkins服务器srv-ess-jenkins（192.168.4.27）：fwint/csrd4#fw
+
 * 出差报告
 ** 2017-0405
 *** linaro 96board
