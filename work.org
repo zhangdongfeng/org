@@ -10248,27 +10248,6 @@ redirected_tty_write
                             spin_unlock_irqrestore(&port->lock, flags);`
 
 * 研发会议
-** tmp
- + mcu 相关特性
-   + APIs and drivers to access on board peripherals like SPI, UART,
-     ADC, PWM, Keyscan and IR HW blocks.
-   + MCU sample application running on host OS for controlling embedded
-     BT applications over WICED HCI protocol.
-   + Sample apps for hardware interfaces including ADC, PUART,
-     GPIO, PWM.
-   + Support for Over-The-Air (OTA) upgrade.
-   + Bluetooth stack included the ROM.
-   + BT stack and profile level APIs for embedded BT application development.
- + bluetooth标准协议
-   + Bluetooth protocols include GAP, GATT, SMP, RFCOMM, SDP,
-     AVDTP, AVTCP and OBEX.
-   + Bluetooth profiles include A2DP source and sink, AVRCP controller
-     and target, HF and AG, HID device and host, HOGP, PBAP, SPP.
-   + BR/EDR embedded sample apps for BT profiles.
-   + Routing audio data over I2S/PCM interface for HFP(SCO) and A2DP Source and Sink.
-   + BLE embedded sample apps for BLE client and server, beacon, AMS, ANCS,
-     HID over GATT, Serial port profile over GATT.
- 附加协议
 ** 0728 代码质量会议
 附件中有一个ppt中的一句话说得很到位：代码质量不能完全依靠人来保证，但最终还是依靠人来保证。
 所以， 从不能完全依靠人来保证这个角度来说，是需要使用工具来帮忙的。
@@ -10313,8 +10292,6 @@ redirected_tty_write
   + 稳定的测试用例可以用作回归测试，频繁变化的测试用例是不能有这个好处的。
   + 测试需要做到自动化，需要做到代码提交的时候，自动集成，烧写和测试。
 
-
-
 ** 0725 5120 review
 杨哲：
 下周请持续组织讨论关于以上两颗IC的策略调整。我要求主管能邀请关键人员参与。
@@ -10332,7 +10309,15 @@ redirected_tty_write
 除了26日我不能参加以外，其他时间我都OK
 我再次提醒，我不喜欢主管们只是带着笔记和笔近来听，你们必须准备资料，包括收集的资料，和你们的想法，这些想法预先要整理好。
 洪波和杨哲这方面一直做得比较好，其它主管要学习。
-** 0717 5118开发平台后续策略
+** 0810 5118B开发平台协议栈对比
+*** 目的
+为了评估后续5118B的mcu开发平台如何支持蓝牙协议栈，对比了如下几个协议栈：
++ Broadcom Wiced BT
+  broadcom的Wiced BT是为IOT开发的一个蓝牙模块，可以做为主控使用，也可以作为模组配置主控使用，支持的功能和蓝牙协议非常丰富。
++ zephyr + IVT
+  在3503目前的sdk上，移植了蓝牙的推歌功能， 主要是A2DP 和AVRCP以及核心的profile。
++ zephyr自带的蓝牙协议栈
+  zephyr操作系统本身也有支持蓝牙协议栈，BLE相对支持比较完善，BR/EDR支持不完善
 *** cypress wiced BT sdk
 **** CYW20706
 | Technology            | Bluetooth (BR + EDR + BLE)                        |
@@ -10348,17 +10333,6 @@ redirected_tty_write
 | Serial Interfaces     | 2 UART, 2 SPI, I2C, PCM, I2S                      |
 | ADC                   | 10-bit @ 100 KHz (Static) 13-bit @ 16 KHz (Audio) |
 | GPIOs                 | Up to 24                                          |
-
-The Cypress CYW20706 is a monolithic, single-chip, Bluetooth 4.2 + HS compliant SOC, comprising a baseband processor, an ARM Cortex-M3 processor, and an integrated transceiver. It is designed for use in embedded applications, with on-chip support for an embedded stack. Manufactured using the industry's most advanced 40 nm CMOS low-power process, the CYW20706 employs the highest level of integration, eliminating all critical external components, and thereby minimizing the device’s footprint and costs associated with the implementation of Bluetooth solutions.
-
-The CYW20706 is the optimal solution for voice, data, home automation, accessories and other applications that require a Bluetooth SIG standards-compliant interface. The CYW20706 supports a host command interface (HCI) through USB or UART and also supports PCM audio.
-
-BCM920706V2_EVAL
-
-The CYW20706 transceiver’s enhanced radio performance meets the most stringent industrial temperature application requirements for compact integration into mobile handset and portable devices. The CYW20706 provides full radio compatibility, enabling it to operate simultaneously with GPS and cellular radios.
-
-The CYW20706 microprocessor unit runs software from the Link Control (LC) layer up to the stack and Application layer. In the HCI mode of operation the stack will be run on the external host. The microprocessor is based on the Cortex-M3 32-bit RISC processor with embedded ICE-RT debug and JTAG interface units. The microprocessor also includes 848 KB of ROM memory for program storage and boot ROM, 352 KB of RAM for data scratch-pad, and patch RAM code.
-
 **** 特性
  1. Bluetooth application
     + RFCOMM/SPP
@@ -10440,6 +10414,7 @@ A2DP的例子实现了一个demo，通过蓝牙建立一个a2dp的链接，实�
 | librarys | wiced_bt_a2dp_sink_init              |
 +----------+--------------------------------------+
 | ROM      | wiced_bt_avdt_register               |
++----------+--------------------------------------+
 |          | wiced_bt_avdt_create_stream          |
 |          | wiced_bt_avdt_connect_req            |
 |          | wiced_audioe_sink_config_init        |
@@ -10471,16 +10446,15 @@ A2DP的例子实现了一个demo，通过蓝牙建立一个a2dp的链接，实�
    应用通过该函数注册a2dp的数据接收的回调， 当有音频数据来的时候就会回调该函数
 ***** 主要涉及的文件大小统计：
 | file name                                                           | code size | data size | rodata size |
-| ../../Apps/a2dp_sink/a2dp_sink.c                                    |       488 |        24 |           0 |
-| ../../Apps/a2dp_sink/a2dp_sink_main.c                               |       744 |         4 |          37 |
-| ../../Apps/a2dp_sink/wiced_bt_cfg.c                                 |         0 |        64 |         221 |
-| ../../libraries/a2dp_sink_profile/wiced_bt_a2dp_sbc.c               |       122 |         0 |           0 |
-| ../../libraries/a2dp_sink_profile/wiced_bt_a2dp_sink_act.c          |     1,950 |         0 |          44 |
-| ../../libraries/a2dp_sink_profile/wiced_bt_a2dp_sink_api.c          |       192 |         0 |           0 |
-| ../../libraries/a2dp_sink_profile/wiced_bt_a2dp_sink_cfg.c          |       282 |         0 |           0 |
-| ../../libraries/a2dp_sink_profile/wiced_bt_a2dp_sink_main.c         |       920 |       508 |          16 |
-| ../../libraries/a2dp_sink_profile/wiced_bt_a2dp_sink_route_config.c |       360 |        56 |           0 |
-| ../../libraries/a2dp_sink_profile/wiced_bt_a2dp_sink_ssm.c          |       140 |         0 |         416 |
+| Apps/a2dp_sink/a2dp_sink.c                                          |       488 |        24 |           0 |
+| Apps/a2dp_sink/a2dp_sink_main.c                                     |       744 |         4 |          37 |
+| Apps/a2dp_sink/wiced_bt_cfg.c                                       |         0 |        64 |         221 |
+| libraries/a2dp_sink_profile/wiced_bt_a2dp_sbc.c                     |       122 |         0 |           0 |
+| libraries/a2dp_sink_profile/wiced_bt_a2dp_sink_act.c                |     1,950 |         0 |          44 |
+| libraries/a2dp_sink_profile/wiced_bt_a2dp_sink_api.c                |       192 |         0 |           0 |
+| libraries/a2dp_sink_profile/wiced_bt_a2dp_sink_cfg.c                |       282 |         0 |           0 |
+| libraries/a2dp_sink_profile/wiced_bt_a2dp_sink_main.c               |       920 |       508 |          16 |
+| libraries/a2dp_sink_profile/wiced_bt_a2dp_sink_ssm.c                |       140 |         0 |         416 |
 ***** 总结
 + 应用开发是相对简单的， 并且都遵循一定的模式，
   主要就是完成配置参数，然后注册一些回调来处理感兴趣的事件就可以了，不需要关心蓝牙具体是如何实现的。
@@ -10564,17 +10538,17 @@ A2DP的例子实现了一个demo，通过蓝牙建立一个a2dp的链接，实�
     Debugging-Support-Using-J-Link.pdf
     Manufacturing-Bluetooth-Test-Tool.pdf
 + 组件部分：
-    | WICED-AMS-Library.pdf                                     | 访问苹果手机的Apple Media Service                           |
-    | WICED-ANCS-Library.pdf                                    | 访问苹果手机的Apple Notification Center Service             |
-    | WICED-Application-Buffer-Pools.pdf 蓝牙协议栈的buffer管理 |                                                             |
-    | WICED-Application-Filesystem.pdf                          | 应用如何通过文件系统操作卡等                                |
-    | WICED-BT-Designer-User-Manual.pdf                         | 用来快速开发蓝牙应用的ide工具，可以自动生成代码             |
-    | WICED-Firmware-Upgrade-Library.pdf                        | 固件升级                                                    |
-    | WICED-HCI-Control-Protocol.pdf                            | 不做主控作为hci controller的协议, 可以通过hci下载开发的应用 |
-    | WICED-HCI-Test-System.pdf                                 | 通过hci的测试工具                                           |
-    | WICED-HID-Device-Library.pdf                              | BLE HID的实现                                               |
-    | WICED-SPI-Implementation.pdf                              | 通过spi做hci controller                                     |
-    | WICED-Secure-Over-the-Air-Firmware-Upgrade.pdf            | OTA固件升级                                                 |
+    | WICED-AMS-Library.pdf                          | 访问苹果手机的Apple Media Service                 |   |
+    | WICED-ANCS-Library.pdf                         | 访问苹果手机的Apple Notification Center Service   |   |
+    | WICED-Application-Buffer-Pools.pdf             | 蓝牙协议栈的buffer管理                            |   |
+    | WICED-Application-Filesystem.pdf               | 应用如何通过文件系统操作卡等                      |   |
+    | WICED-BT-Designer-User-Manual.pdf              | 自动生成代码的快速开发蓝牙应用的ide工具           |   |
+    | WICED-Firmware-Upgrade-Library.pdf             | 固件升级                                          |   |
+    | WICED-HCI-Control-Protocol.pdf                 | 不做主控作为hci controller的协议, 通过hci下载应用 |   |
+    | WICED-HCI-Test-System.pdf                      | 通过hci的测试工具                                 |   |
+    | WICED-HID-Device-Library.pdf                   | BLE HID的实现                                     |   |
+    | WICED-SPI-Implementation.pdf                   | 通过spi做hci controller                           |   |
+    | WICED-Secure-Over-the-Air-Firmware-Upgrade.pdf | OTA固件升级                                       |   |
 
 *** zephyr + IVT
 **** A2DP sink例子的分析
@@ -10583,31 +10557,38 @@ A2DP的例子实现了一个demo，通过蓝牙建立一个a2dp的链接, 播放
 ***** 相关各层接口
 主要分为三层：
 bt app：用来处理应用逻辑， 播放音乐，处理方案规格关心的bt事件
-btmgr：适配ivt协议栈的bt管理层，结合ivt库实现profile的功能。
-IVT库：提供各种bt核心协议的解析。
-
-| bt app    |        |                               |
-|           | LOCAL  | btmgr_ready_cb                |
-|           |LOCAL        | btplay_stream_opened          |
-|           | LOCAL       | btplay_stream_closed          |
-|           |     LOCAL   | btplay_pcm_indicated          |
-| btmgr     | GLOBAL | btmgr_start                   |
-|           | LOCAL  | gap_indicate_cb               |
-|           | LOCAL  | gap_set_local_name_cfm        |
-|           |   LOCAL     |a2dp_indicate_cb                               |
-| IVT GAP   |        |                               |
-|           | GLOBAL | GAP_SetLocalNameA             |
-|           | GLOBAL | GAP_ResetHardwareA            |
-|           | GLOBAL | GAP_RegisterIndCbk            |
-| IVT A2DP  |        |                               |
-|           | GLOBAL | A2DP_StreamReconfigure        |
-|           | GLOBAL | A2DP_StreamSuspend            |
-|           | GLOBAL | A2DP_StreamStart              |
-|           | GLOBAL | A2DP_GetConfiguration         |
-|           | GLOBAL | A2DP_Connect                  |
-|           | GLOBAL | A2DP_Register_SEP             |
-|           | GLOBAL | A2DP_RegCbk                   |
-|           | GLOBAL | A2DP_RegisterService          |
+btmgr：适配ivt协议栈的bt管理层，结合ivt库实现profile的功能。在bt mgr中要要做跟平台相关的各种事务，比如bt协议栈的适配，设备管理，存储管理等。
+IVT库：提供各种和平台无关的bt核心协议的解析。
++----------+--------+------------------------+
+| bt app   |        |                        |
++----------+--------+------------------------+
+|          | LOCAL  | btmgr_ready_cb         |
+|          | LOCAL  | btplay_stream_opened   |
+|          | LOCAL  | btplay_stream_closed   |
+|          | LOCAL  | btplay_pcm_indicated   |
++----------+--------+------------------------+
+| btmgr    | GLOBAL | btmgr_start            |
+|          | LOCAL  | gap_indicate_cb        |
+|          | LOCAL  | gap_set_local_name_cfm |
+|          | LOCAL  | a2dp_indicate_cb       |
++----------+--------+------------------------+
+| IVT GAP  |        |                        |
++----------+--------+------------------------+
+|          | GLOBAL | GAP_SetLocalNameA      |
+|          | GLOBAL | GAP_ResetHardwareA     |
+|          | GLOBAL | GAP_RegisterIndCbk     |
++----------+--------+------------------------+
+| IVT A2DP |        |                        |
++----------+--------+------------------------+
+|          | GLOBAL | A2DP_StreamReconfigure |
+|          | GLOBAL | A2DP_StreamSuspend     |
+|          | GLOBAL | A2DP_StreamStart       |
+|          | GLOBAL | A2DP_GetConfiguration  |
+|          | GLOBAL | A2DP_Connect           |
+|          | GLOBAL | A2DP_Register_SEP      |
+|          | GLOBAL | A2DP_RegCbk            |
+|          | GLOBAL | A2DP_RegisterService   |
++----------+--------+------------------------+
 
 ***** 工作流程
 ****** 初始化
@@ -10622,10 +10603,10 @@ IVT库：提供各种bt核心协议的解析。
   + GAP_ResetHardwareA回调gap_reset_hardware_cfm
   + gap_reset_hardware_cfm调用GAP_SetLocalNameA并设置回调gap_set_local_name_cfm
   + gap_set_local_name_cfm 最后会调用btmgr_ready_cb
-    | GAP_RegisterIndCbk          | 设置gap_indicate_cb为GAP的indication的处理函数  |
-    | GAP_RegisterTransportLayerA | 设置协议栈使用的传输方式以及gap_register_tl_cfm |
-    | GAP_ResetHardwareA          | 复位并设置 gap_reset_hardware_cfm               |
-    | GAP_SetLocalNameA           | 设置bt设备名字，并设置回调gap_set_local_name_cfm          |
+    | GAP_RegisterIndCbk          | 设置gap_indicate_cb为GAP的indication的处理函数   |
+    | GAP_RegisterTransportLayerA | 设置协议栈使用的传输方式以及gap_register_tl_cfm  |
+    | GAP_ResetHardwareA         |  复位并设置 gap_reset_hardware_cfm                |
+    | GAP_SetLocalNameA          |  设置bt设备名字，并设置回调gap_set_local_name_cfm |
 + btmgr_ready_cb
   调用A2DP_RegisterService注册A2DP服务，设置a2dp_indicate_cb为A2DP事件的回调，同时记录应用层注册的回调
   调用A2DP_Register_SEP注册服务端点（sbc acc）
@@ -10637,20 +10618,20 @@ IVT库：提供各种bt核心协议的解析。
   bt连接建立后， 会通过a2dp_indicate_cb来处理各种a2dp的时间，如A2DP_EV_STREAMOPEN，在该事件的处理中会通过回调应用层注册的处理函数btplay_stream_opened
 + btplay_stream_opened
   应用层的具体处理逻辑，比如播放提示音什么的。
-
 ***** 各模块大小
-
-|---------------+------------------+-----------+-----------+-------------|
++---------------+------------------+-----------+-----------+-------------+
 |               | module name      | code size | data size | rodata size |
-|---------------+------------------+-----------+-----------+-------------|
++---------------+------------------+-----------+-----------+-------------+
 | bt app        | btplay           |      1532 |         4 |          60 |
-|---------------+------------------+-----------+-----------+-------------|
++---------------+------------------+-----------+-----------+-------------+
 | bt mgr        |                  |     17144 |      4200 |         739 |
++---------------+------------------+-----------+-----------+-------------+
 |               | actions/btdrv/   |     15676 |        69 |         712 |
 |               | actions/btmgr/   |     12820 |      4127 |          27 |
 |               | actions/btstack/ |      2348 |         4 |           0 |
-|---------------+------------------+-----------+-----------+-------------|
++---------------+------------------+-----------+-----------+-------------+
 | baseband      |                  |    285960 |      7118 |        5458 |
++---------------+------------------+-----------+-----------+-------------+
 |               | core/lc/         |     65840 |      3112 |          16 |
 |               | core/hc/         |     15104 |        28 |         680 |
 |               | core/hw_rf/      |     30652 |       514 |        2144 |
@@ -10662,32 +10643,244 @@ IVT库：提供各种bt核心协议的解析。
 |               | core/tc/         |     10182 |         0 |           0 |
 |               | core/hcit/       |      2734 |         9 |           0 |
 |               | core/transport/  |      9232 |        57 |           0 |
-|---------------+------------------+-----------+-----------+-------------|
++---------------+------------------+-----------+-----------+-------------+
 | core profiles |                  |     67416 |       159 |        1507 |
++---------------+------------------+-----------+-----------+-------------+
 |               | hci_             |     19370 |        16 |        1003 |
 |               | gap_             |     11136 |        44 |         144 |
 |               | l2cap_           |     21176 |         5 |         224 |
 |               | sdap_            |      6016 |        75 |           0 |
 |               | sdp              |      9718 |        19 |         136 |
-|---------------+------------------+-----------+-----------+-------------|
++---------------+------------------+-----------+-----------+-------------+
 | profiles      |                  |     37446 |       628 |             |
++---------------+------------------+-----------+-----------+-------------+
 |               | a2dp_            |      1692 |         8 |           0 |
 |               | avctp_           |      3266 |         4 |           0 |
 |               | avdtp_           |      9672 |         5 |           0 |
 |               | avrcp_           |     10846 |         4 |           0 |
-|---------------+------------------+-----------+-----------+-------------|
++---------------+------------------+-----------+-----------+-------------+
 | others        |                  |           |           |             |
++---------------+------------------+-----------+-----------+-------------+
 |               | others           |     11970 |       607 |           0 |
-|---------------+------------------+-----------+-----------+-------------|
++---------------+------------------+-----------+-----------+-------------+
+***** 总结
++ 应用开发是相对简单的，只需要注册关心的事件的回调就可以了。 但提供给应用开发的个性化的配置较少。
++ btmgr层中，需要按照IVT的接口，提供各个核心协议要求的回调，每一个profile的开发都需要严格按照协议处理各个层次的bt协议的内容，为了实现一个简单的profile就需要和各个核心的profile都做一些适配，不同核心协议需要通过多级的回调才可以串起来。相对比较啰嗦，需要的胶水代码较多。
++ 底层协议的很多配置信息都体现在这里的回调函数中，如果用户需要修改到配置，就需要在这里修改，而不是应该层修改。
++ IVT协议相对独立，规范性好，协议的完备性也都有。凡是需要用户处理的部分都通过回调的方式开放出来了。
++ 已经量产验证过，协议的兼容性相对有保证
++ 资源开销不好，IVT本身还要加上上层的管理层才是一个完整的整体，相对较大
+
+*** zephyr bluetooth
+#+OPTIONS: \n:t ^:nil  toc:nil
+**** A2DP sink例子的分析
+***** 简述
+zephyr目前a2dp的实现还很不完全， 只是编译了一下相应文件，没有真正的功能的。
+***** 相关各层接口
+zephyr的bt的协议栈的结构是比较清晰的， 并且与IVT协议栈相比， 除了协议本身，设备管理等必须的功能也完成了。
+
+zephyr的蓝牙协议的各层都遵循一定的模式有点类似linux的sock编程。
+对固定的L2CAP通道，比如br/edr的信令通道， LE的ATT和信令通道，使用固定的server来处理，在hci的对应事件发生的时候，调用server的accept来建立和初始化通道。
+对动态的或者使用psm来多路复用的信道，在l2cap上的每种协议都有一个bt_l2cap_server，每个server的accecpt方法会在有对应psm的链接请求的时候被调用。在accept方法中会负责初始化新建的channel的处理函数bt_l2cap_chan_ops。AVDTP就是这样的一个server。
+
+a2dp协议和avdtp协议之间采用自定义的回调的方式来解耦。
+
+在zephyr的蓝牙协议栈中，并没有明显的看到GAP协议的位置，这是因为GAP中定义的参数，角色等都是通过zephyr的编译配置等方式实现了。用户通过修改配置项来达成GAP的功能。
+
++-------+--------+---------------------------------+
+| A2DP  |        |                                 |
++-------+--------+---------------------------------+
+|       | GLOBAL | bt_a2dp_register_endpoint       |
+|       | GLOBAL | bt_a2dp_init                    |
+|       | GLOBAL | a2dp_accept                     |
+|       | GLOBAL | get_new_connection              |
+|       | GLOBAL | a2d_reset                       |
++-------+--------+---------------------------------+
+| AVDTP |        |                                 |
++-------+--------+---------------------------------+
+|       | GLOBAL | bt_avdtp_init                   |
+|       | GLOBAL | bt_avdtp_register_sep           |
+|       | GLOBAL | bt_avdtp_register               |
+|       | GLOBAL | bt_avdtp_l2cap_recv             |
+|       | GLOBAL | bt_avdtp_l2cap_connected        |
+|       | GLOBAL | bt_avdtp_l2cap_accept           |
+|       | GLOBAL | bt_avdtp_l2cap_disconnected     |
++-------+--------+---------------------------------+
+| conn  |        |                                 |
++-------+--------+---------------------------------+
+|       | GLOBAL | bt_conn_init                    |
+|       | GLOBAL | bt_conn_process_tx              |
+|       | GLOBAL | bt_conn_create_pdu              |
+|       | GLOBAL | bt_conn_lookup_handle           |
+|       | GLOBAL | bt_conn_prepare_events          |
+|       | GLOBAL | bt_conn_recv                    |
+|       | GLOBAL | bt_conn_identity_resolved       |
+|       | GLOBAL | bt_enable                       |
+|       | GLOBAL | bt_recv                         |
++-------+--------+---------------------------------+
+| L2CAP |        |                                 |
++-------+--------+---------------------------------+
+|       | GLOBAL | bt_le_conn_params_valid         |
+|       | GLOBAL | bt_l2cap_br_init                |
+|       | GLOBAL | bt_l2cap_br_fixed_chan_register |
+|       | GLOBAL | bt_l2cap_br_recv                |
+|       | GLOBAL | bt_l2cap_br_server_register     |
+|       | GLOBAL | bt_l2cap_br_connected           |
+|       | LOCAL  | l2cap_br_recv                   |
++-------+--------+---------------------------------+
+
+***** 工作流程
+****** 初始化
++ bt_a2dp_init
+  应用调用bt_avdtp_register(& avdtp_cb );注册a2dp的回调a2dp_accept，之后调用bt_enable就可以了。
++ bt_enable
+  用户首先调用bt_enable注册回调，该回调会在蓝牙初始化好后调用，蓝牙初始化会异步进行。
+  后台启动蓝牙初始化
++ bt_init
+  hci_init用来通过hci完成蓝牙的初始化，br_init用来初始化传统蓝牙
+  bt_conn_init用来初始化协议栈的链接管理，会初始化att，smp， l2cap等核心协议，其中bt_l2cap_br_init初始化l2cap层
++ bt_l2cap_br_init
+  bt_l2cap_br_fixed_chan_register为l2cap的信令通道注册处理函数
+  然后为基于l2cap的各个协议（psm）注册处理函数，分别是bt_rfcomm_init，bt_avdtp_init，bt_sdp_init，bt_a2dp_init。
+  bt_avdtp_init调用bt_l2cap_br_server_register注册bt_avdtp_l2cap_accept是avdtp的协议处理函数
++ bt_avdtp_l2cap_accept
+  回调a2dp_accept来产生一个bt_avdtp的session，并设置对应的l2cap的channel的处理函数为 static struct bt_l2cap_chan_ops ops = {
+                .connected = bt_avdtp_l2cap_connected,
+                .disconnected = bt_avdtp_l2cap_disconnected,
+                .recv = bt_avdtp_l2cap_recv,
+******  A2dp链接建立
+从中断程序开始到应用程序的回调流程大概如下：
+hci_rx_thread
+   bt_conn_recv
+     bt_l2cap_recv
+       l2cap_chan_recv
+         bt_avdtp_l2cap_recv
+
+***** 各模块大小
+
++----------------------+------------------------------+--------+-------+------+
+| bluetooth host       |                              |  36812 |  6703 | 1439 |
++----------------------+------------------------------+--------+-------+------+
+|                      | host/a2dp.c                  |    116 |    92 |    0 |
+|                      | host/at.c                    |    102 |     0 |    0 |
+|                      | host/att.c                   |  3,688 |   228 |  216 |
+|                      | host/avdtp.c                 |    206 |     8 |    0 |
+|                      | host/conn.c                  |  3,946 | 1,260 |   16 |
+|                      | host/gatt.c                  |  1,284 |   332 |    0 |
+|                      | host/hci_core.c              |  7,084 | 2,608 |    0 |
+|                      | host/hfp_hf.c                |    276 |   392 |  300 |
+|                      | host/keys.c                  |    264 |   104 |    0 |
+|                      | host/keys_br.c               |     76 |   104 |    0 |
+|                      | host/l2cap.c                 |  3,262 |   168 |    0 |
+|                      | host/l2cap_br.c              |  3,236 |   212 |    0 |
+|                      | host/rfcomm.c                |  3,282 |   208 |  256 |
+|                      | host/sdp.c                   |  2,496 |   377 |  216 |
+|                      | host/smp.c                   |  7,408 |   610 |  418 |
+|                      | host/uuid.c                  |     86 |     0 |   17 |
+|                      | common/rpa.c                 |    142 |     0 |    0 |
++----------------------+------------------------------+--------+-------+------+
+| bluetooth controller |                              |  37890 |  5291 |   32 |
++----------------------+------------------------------+--------+-------+------+
+|                      | controller/hal/nrf5/cntr.c   |    136 |     1 |    0 |
+|                      | controller/hal/nrf5/ecb.c    |    142 |     0 |    0 |
+|                      | controller/hal/nrf5/radio.c  |  1,610 |   535 |    0 |
+|                      | controller/hal/nrf5/rand.c   |    252 |     4 |    0 |
+|                      | controller/hci/hci.c         |  4,240 |   166 |    0 |
+|                      | controller/hci/hci_driver.c  |    318 | 1,744 |   16 |
+|                      | controller/ll_sw/crypto.c    |     64 |    20 |    0 |
+|                      | controller/ll_sw/ctrl.c      | 23,888 |   392 |   16 |
+|                      | controller/ll_sw/ll.c        |    560 | 1,308 |    0 |
+|                      | controller/ll_sw/ll_adv.c    |  1,068 |    16 |    0 |
+|                      | controller/ll_sw/ll_filter.c |  3,012 |   691 |    0 |
+|                      | controller/ll_sw/ll_master.c |    156 |     0 |    0 |
+|                      | controller/ll_sw/ll_scan.c   |    180 |     6 |    0 |
+|                      | controller/ticker/ticker.c   |  1,262 |    88 |    0 |
+|                      | controller/util/mayfly.c     |    580 |   320 |    0 |
+|                      | controller/util/mem.c        |    246 |     0 |    0 |
+|                      | controller/util/memq.c       |      0 |     0 |    0 |
+|                      | controller/util/util.c       |     34 |     0 |    0 |
++----------------------+------------------------------+--------+-------+------+
 
 ***** 总结
-+ 应用开发是相对简单的，只需要注册关心的事件的回调就可以了。
-+ btmgr层中，需要按照IVT的接口，提供各个核心协议要求的回调，相对比较复杂一些，每一个profile的开发都需要严格按照协议处理各个层次的bt协议的内容，相对来说胶水代码比较多。
-+ IVT协议相对独立，规范性好，协议的完备性也都有。凡是需要用户处理的部分都通过回调的方式开放出来了。
-*** zephyr bluetooth
++ 架构清晰，各个层次耦合较少，应用开发简单
++ 有很方便的可配置性，不要的功能可以很方便的配置掉
++ 资源开销很少，包含了BLE的核心协议栈只有30~40K
++ BLE的支持比较完善，
++ BR/EDR的支持，可以明显看到只完成了一部分工作，完成度不是太好
+*** 协议栈对比
++-------------+-----------------------------+-----------------------+--------------------+
+|             | Broadcom                    | IVT+zephyr            | zephyr             |
++-------------+-----------------------------+-----------------------+--------------------+
+| 协议支持    | RFCOMM/SPP                  | a2dp_ui               | a2dp               |
++-------------+-----------------------------+-----------------------+--------------------+
+|             | A2DP source and sink        | avdtp_ui              | gatt               |
+|             | AVRCP controller and target | goep_ui               | hfp_hf             |
+|             | Hands-free AG and HF        | l2cap_ui              | rfcomm             |
+|             | BR-EDR and BLE HID Device   | rfcomm_ui             | att                |
+|             | BR-EDR HID Host             | smp_ui                | hci                |
+|             | BLE Client and Server       | att_ui                | l2cap              |
+|             | BLE beacon                  | avrcp_ui              | sdp                |
+|             | Apple ANCS, AMS             | hci_ui                | avdtp              |
+|             | Apple HomeKit and iAP2      | obexui                |                    |
+|             | OBEX library and PBAP       | sdap_ui               |                    |
+|             | Serial over GATT profile.   | spp_app_ui            |                    |
+|             |                             | avctp_ui              |                    |
+|             |                             | gap_ui                |                    |
+|             |                             | hfp_ui                |                    |
+|             |                             | pbap_ui               |                    |
+|             |                             | sdpui                 |                    |
+|             |                             | spp_ui                |                    |
++-------------+-----------------------------+-----------------------+--------------------+
+| profile开发 | 核心profile实现在ROM中      | IVT只负责协议解析相关 | hci之上开源        |
+|             | 应用profile较齐全，并开源   | 开发相对相对繁琐      | profile开发简单    |
+|             | 用户需要较少修改就可以      | IVT的相对不太容易理解 |                    |
++-------------+-----------------------------+-----------------------+--------------------+
+| 应用开发    | 简单                        | 简单                  | 简单               |
+|             | 不开源部分提供可配置性好    | 尚未提供太多可配置性  | 可配置通过代码完成 |
++-------------+-----------------------------+-----------------------+--------------------+
+| 资源开销    | 848KB ROM 352K RAM          | 130k                  | 21K                |
++-------------+-----------------------------+-----------------------+--------------------+
+| 完备性      | BR/EDR/BLE完善              | 支持了A2DP和AVRCP     | BR/EDR支持不完善   |
+|             | 应用profile完善并有demo     |                       | BLE支持相对完善    |
++-------------+-----------------------------+-----------------------+--------------------+
+| 兼容性      | 只提供协议demo，无考虑      |                       |                    |
+|             | 协议本身估计是测试过PTS的   |                       |                    |
++-------------+-----------------------------+-----------------------+--------------------+
 
-*** 5118B
-**** 平台主要优势
+说明:
++ 协议支持
+  从协议支持上来看， broadcom的支持非常丰富，ER/EDR/BLE支持都非常完善， 同时也支持了大部分常见的应用profile， 包括苹果的BLE的profile。 除了支持 音频，打电话，还支持电话本，hid等。 除此之外还可以支持通过usb，uart以及spi来作为外挂的模组来搭配别的主控使用。
+
+  IVT库支持的协议相对也比较全，音频，打电话之外，也支持电话本等协议，
+
+  zephyr的协议相对支持的会少一些，ble是比较完善的， BR/EDR的支持都是实验性质的，已经支持的几个有些也是半成品。
+
++ profile开发
+  对常用的profile broadcom平台都提供了开源的基本实现，使用profile要做个性话的修改，或者解决兼容性问题的话，估计小修改就可以了。
+  大部分核心的profile broadcom的实现是放在rom中的，对外提供封装好的借口。
+
+  IVT库的特点是对蓝牙的协议解析规范支持比较完善，对所有在蓝牙协议上都通过回调的方式交给平台去实现，这样的选择就暴露了特别多的接口，开发一个profile经常需要从协议栈上各个依赖的profile都做好个性化的处理，也需要提供蓝牙设备管理，存储管理等才能够完成一个完整的profile开发， 开发相对繁琐，代码量也会多一些。同时，ivt协议的接口也需要较大的学习曲线。
+
+  zephyr在hci之上都是开源的，并且对协议层也有比较好的分层，开发相对简单直接。整个协议栈是完整重写的，同时协议栈的解析也和平台相关的功能有机的结合起来了，写出的代码会明显小一些，应用profile开发一般只需要关注对应的profile即可， 不太需要关注底层的profile，相对会容易一些。
+
++ 应用开发
+  在profie开发中，做好分层和抽象后，把应用和profile做好隔离后， 应用开发都相对比较简单。
+
++ 资源开销
+  资源统计主要统计了代码的大小，主要是BR/EDR的核心profile(L2CAP  SDP HCI GAP)，加上A2DP 和 AVRCP这两个profile。 数据的统计没有放在这里，主要是因为不好统计动态内存。只统计全局变量意义不大。
+
+  broadcom由于核心的profile都是在rom中，同时rom中除了蓝牙协议栈，还有非常多的其他功能，因此不太好统计实际大小
+  IVT由于需要个性化东西太多，适配代码比较多，因此相对代码会多一些
+  zephyr会明显小很多的，原因有如下几点：
+  + 很多ivt需要代码完成的功能是通过编译可配置完成的， 比如GAP。
+  + 协议的解析和对于的动作都是在一层完成的，模块化更好，没有使用ivt绕来绕去的流程，代码也简洁直接得多
+  + profile还未完善，代码也会偏少一些
++ 兼容性的考虑
+  从broadcom平台来看，提供的应用仅仅是demo协议栈使用，比如a2dp收到数据直接丢掉，事件处理仅仅是打印而已。
+  而按照我们做产品的经验来看，很多的兼容性问题都是手机等设备不规范，需要应用层解决的，所以这部分的兼容性只能在使用平台的人在做产品的时候解决。
+  profile本身的蓝牙协议的兼容性，可以考虑使用sig的协议测试工具来解决。
+** 5118B
+*** 平台主要优势
 5118平台相对现在常见的mcu开发平台，主要的优势在于:
 + 蓝牙支持
 + 多格式解码支持
@@ -10695,7 +10888,7 @@ IVT库：提供各种bt核心协议的解析。
 目前的mcu开发平台大部分都不会提供这些组件，特别是蓝牙的协议栈，几乎没有看到开源的。
 音频部分有一些开源的实现， 但开源的实现相对占用资源都比较大， 并且支持的格式也不多。
 像wifi支持这些都不能算做优势，只是从侧面说明了我们平台的cpu和ram能够支持相对复杂的应用的例子。
-**** 主要架构考虑
+*** 主要架构考虑
 + 基于开发板进行开发
   开发板需要满足主要
 + 使用统一的内存模型
@@ -10897,7 +11090,7 @@ wiced_bt_avdt_connect_req(p_ccb->peer_addr, 0/*Not Used*/, p_ccb->p_dt_cback);
 wiced_audioe_sink_config_init(&p_config_data->p_param)
 wiced_audio_sink_register_data_cback( void* p_cback );
 
-*** zephyr
+*** zephyr + IVT
   + btmgr_start(btmgr_ready_cb);
     + err = ivtmgr_rdm_init();
       + p_rdm = NEW(sizeof(struct ivtmgr_rdm_priv));
@@ -11118,8 +11311,1041 @@ wiced_audio_sink_register_data_cback( void* p_cback );
   + a2dp_indicate_cb
   +
 
+*** zephyr bt
+**** bluetooth
+***** doc
+****** gatt
+Bluetooth Low Energy 介绍 低功耗蓝牙介绍
+http://www.cnblogs.com/cb168/articles/4844010.html
+****** avdtp
+http://blog.sina.com.cn/s/blog_69b5d2a50101elze.html
+****** 蓝牙电话本
+http://www.eefocus.com/majianhui/blog/09-12/182431_fe385.html
+http://www.eefocus.com/majianhui/blog/cate_4037_0.html
+****** bluedroid
+http://source.android.com/devices/bluetooth.html
+http://www.cnblogs.com/hzl6255/p/3887547.html
+使用btproxy对蓝牙设备进行安全分析
+http://www.freebuf.com/articles/wireless/77389.html
+****** spec
+http://oscar.iitb.ac.in/onsiteDocumentsDirectory/Bluetooth/Bluetooth/index.html
+******* 蓝牙协议的命令和事件
+http://blog.csdn.net/zhaohc_nj/article/details/7990695
+http://blog.chinaunix.net/uid-21411227-id-2780269.html
+http://blog.chinaunix.net/uid-21411227-id-2779815.html
+******* baseband
+http://www.cnblogs.com/hzl6255/p/3840641.html
+The link control layer carries out higher-level operations such as inquiry and paging and manages multiple links with different devices and even different piconets. It does this through a set of state machines, which drive the baseband through the following stages to establish links:
+1.      Host requests inquiry.
+2.      Inquiry is sent using the inquiry hopping sequence.
+3.      Inquiry scanning devices respond to the inquiry scan with FHS packets that contain all the information needed to connect with them.
+4.      The contents of the FHS packets are passed back to the host.
+5.      The host requests connection to one of the devices that responded to the inquiry.
+6.      Paging is used to initiate a connection with the selected device.
+7.      If the selected device is page scanning it responds to the page.
+8.      If the page-scanning device accepts the connection it will begin hopping using the Master’s frequency hopping sequence and timing.
+******* hci
+http://www.cnblogs.com/hzl6255/p/3800257.html
+
+Command分为六种类型(case OGF)
+~0x01 链路控制命令(Link Control Commands)
+~0x02 链路政策命令(Link Policy Commands)
+~0x03 控制和基带命令(Control & Baseband Commands)
+~0x04 信息命令(Informational Parameters)
+~0x05 状态命令(Status Parameters)
+~0x06 测试命令(Testing Commands)
+~0x3F 厂商调试命令(Reserved)
+
+******* l2cap
+http://www.cnblogs.com/hzl6255/p/3801732.html
+The Logical Link Control and Adaptation Protocol (L2CAP) takes data from the higher layers of the Bluetooth stack and from applications and sends it over the lower layers of the stack.  L2CAP passes packets either to the Host Controller Interface (HCI), or in a host-less system, L2CAP passes packets directly to the Link Manager.  The following figure shows the L2CAP’s position in the Bluetooth stack.
+a)      Multiplexing between different higher layer protocols, allowing them to share lower layer links
+b)      Segmentation and reassembly to allow transfer of larger packets than lower layers support
+c)      Group management, providing one-way transmission to a group of other Bluetooth devices
+d)     Quality of service management for higher layer protocols.
+http://oscar.iitb.ac.in/onsiteDocumentsDirectory/Bluetooth/Bluetooth/Help/Logical%20Link%20Control%20and%20Adaptation%20Protocol_files/image008.gif
+******* HFP
+http://www.cnblogs.com/hzl6255/p/3819113.html
+******* RFCOMM
+http://www.cnblogs.com/hzl6255/p/3811013.html
+******* sdp
+http://www.cnblogs.com/hzl6255/p/3826558.html
+******* lmp
+http://www.cnblogs.com/hzl6255/p/3857353.html
+http://article.yeeyan.org/view/jianermei/51468
+http://oscar.iitb.ac.in/onsiteDocumentsDirectory/Bluetooth/Bluetooth/Help/Link%20Management%20Protocol.htm
+1) Attaching slaves to piconets, and allocating their active member addresses.
+2) Breaking connections to detach Slaves from a piconet.
+3) Configuring the link including Master/Slave switches
+4) Establishing ACL and SCO links.
+5) Putting connections into Low Power modes: Hold, Sniff and Park.
+6) Controlling test modes.
+******* ble
+http://www.cnblogs.com/hzl6255/p/4127138.html
+******** ll
+http://www.cnblogs.com/hzl6255/p/4127403.html
+******** gap
+http://www.cnblogs.com/hzl6255/p/4133596.html
+GAP有如下四个目的
+- Profile Role
+- 可发现模式和过程
+- 连接模式和过程
+- 安全模式和过程
+******** att
+http://www.cnblogs.com/hzl6255/p/4141505.html
+Attribute PDUs有六种类型
+- Requests      : Client->Server, 请求回应
+- Responses     : Server->Client, 响应请求.
+- Commands      : Client->Server, 命令
+- Notifications : Server->Client, 服务端通知
+- Indications   : Server->Client, 请求确认
+- Confirmations : Client->Server, Ind确认
+******** gatt
+http://www.cnblogs.com/hzl6255/p/4158363.html
+GATT中最上层是Profile，Profile由一个或多个服务(Service)组成
+服务是由Characteristics组成，或是其他服务的引用(Reference)
+Characteristic包含一个值(Value)，可能包含该Value的相关信息
+
+GATT中定义了11项Feature
+1.  Server Configuration
+2.  Primary Service Discovery
+3.  Relationship Discovery
+4.  Characteristic Discovery
+5.  Characteristic Descriptor Discovery
+6.  Reading a Characteristic Value
+7.  Writing a Characteristic Value
+8.  Notification of a Characteristic Value
+9.  Indication of a Characteristic Value
+10. Reading a Characteristic Descriptor
+11. Writing a Characteristic Descriptor
+每个Feature都有对应的过程和子过程，这些过程描述了如何使用ATT来实现各自的功能
+
+***** a2dp
+****** bt_a2dp_init
++ bt_avdtp_register(&avdtp_cb);
++ static struct bt_avdtp_event_cb avdtp_cb = {
+        .ind = &cb_ind,
+        .cfm = &cb_cfm
+****** bt_avdtp_l2cap_accept
++ static struct bt_l2cap_chan_ops ops = {
+  .connected = bt_avdtp_l2cap_connected,
+  .disconnected = bt_avdtp_l2cap_disconnected,
+  .recv = bt_avdtp_l2cap_recv,
+
+***** handsfree
+****** handsfree_enable();
++ static struct bt_hfp_hf_cb hf_cb = {
+  .connected = connected,
+  .disconnected = disconnected,
++ err = bt_hfp_hf_register(& hf_cb);
+  + bt_hf = cb;
++ hfp_hf_init();
+  + static struct bt_rfcomm_server chan = {
+    .channel = BT_RFCOMM_CHAN_HFP_HF,
+    .accept = bt_hfp_hf_accept,
+  + bt_rfcomm_server_register(&chan);
+    + (rfcomm_server_lookup_channel(server->channel)) {
+    + server->_next = servers;
+****** bt_hfp_hf_accept(struct bt_conn *conn, struct bt_rfcomm_dlc **dlc)
+        + static struct bt_rfcomm_dlc_ops ops = {
+          .connected = hfp_hf_connected,
+          .disconnected = hfp_hf_disconnected,
+          .recv = hfp_hf_recv,
+        + struct bt_hfp_hf *hf = &bt_hfp_hf_pool[i];
+          hf->at.buf = hf->hf_buffer;
+          hf->at.buf_max_len = HF_MAX_BUF_LEN;
+          hf->rfcomm_dlc.ops = &ops;
+          hf->rfcomm_dlc.mtu = BLUETOOTH_HFP_MAX_MTU;
+          *dlc = &hf->rfcomm_dlc;
+******  rfcomm_dlc_connected(dlc);
+      + dlc->state = BT_RFCOMM_STATE_CONNECTED;
+      + rfcomm_send_msc(dlc, BT_RFCOMM_MSG_CMD_CR);
+      + k_thread_spawn(dlc->stack, sizeof(dlc->stack), rfcomm_dlc_tx_thread,
+      + dlc->ops->connected(dlc);
+      + .connected = hfp_hf_connected,
+        + struct bt_hfp_hf *hf = CONTAINER_OF(dlc, struct bt_hfp_hf, rfcomm_dlc);
+        + hf_slc_establish(hf);
+          + err = hfp_hf_send_cmd(hf, brsf_resp, brsf_finish, "AT+BRSF=%u",
+            + at_register(&hf->at, resp, finish);
+            + ret = bt_rfcomm_dlc_send(&hf->rfcomm_dlc, buf);
+              + net_buf_put(&dlc->tx_queue, buf);
+******  hfp_hf_recv
+- at_parse_input(&hf->at, buf)
+  + parser_cb[at->state](at, buf);
+  + static handle_parse_input_t parser_cb[] = {
+  + at_state_start, /* AT_STATE_START */
+  + at_state_start_cr, /* AT_STATE_START_CR */
+  + at_state_start_lf, /* AT_STATE_START_LF */
+  + at_state_get_cmd_string, /* AT_STATE_GET_CMD_STRING */
+  + at_state_process_cmd, /* AT_STATE_PROCESS_CMD */
+  + at_state_get_result_string, /* AT_STATE_GET_RESULT_STRING */
+  + at_state_process_result, /* AT_STATE_PROCESS_RESULT */
+  + at_state_unsolicited_cmd /* AT_STATE_UNSOLICITED_CMD */
+
+****** rfcomm_recv
+  + struct bt_rfcomm_session *session = RFCOMM_SESSION(chan);
+  + dlci = BT_RFCOMM_GET_DLCI(hdr->address);
+  + frame_type = BT_RFCOMM_GET_FRAME_TYPE(hdr->control);
+  + rfcomm_check_fcs(fcs_len, buf->data, fcs)
+  + switch (frame_type) {
+  + case BT_RFCOMM_SABM:
+  + rfcomm_handle_sabm(session, dlci);
+    + dlc = rfcomm_dlcs_lookup_dlci(session->dlcs, dlci);
+    + dlc = rfcomm_dlc_accept(session, dlci);
+      + channel = BT_RFCOMM_GET_CHANNEL(dlci);
+      + server = rfcomm_server_lookup_channel(channel);
+      + server->accept(session->br_chan.chan.conn, &dlc) < 0) {
+      + static int bt_hfp_hf_accept(struct bt_conn *conn, struct bt_rfcomm_dlc **dlc)
+        + static struct bt_rfcomm_dlc_ops ops = {
+          .connected = hfp_hf_connected,
+          .disconnected = hfp_hf_disconnected,
+          .recv = hfp_hf_recv,
+        + struct bt_hfp_hf *hf = &bt_hfp_hf_pool[i];
+          hf->at.buf = hf->hf_buffer;
+          hf->at.buf_max_len = HF_MAX_BUF_LEN;
+          hf->rfcomm_dlc.ops = &ops;
+          hf->rfcomm_dlc.mtu = BLUETOOTH_HFP_MAX_MTU;
+          *dlc = &hf->rfcomm_dlc;
+      + rfcomm_dlc_init(dlc, session, dlci, BT_RFCOMM_ROLE_ACCEPTOR);
+        + dlc->dlci = dlci;
+          dlc->session = session;
+          dlc->rx_credit = RFCOMM_DEFAULT_CREDIT;
+          dlc->state = BT_RFCOMM_STATE_INIT;
+          dlc->role = role;
+    + result = rfcomm_dlc_security(dlc);
+    + rfcomm_send_ua(session, dlci) < 0) {
+      + buf = bt_l2cap_create_pdu(&rfcomm_session_pool, K_FOREVER);
+      + cr = BT_RFCOMM_RESP_CR(session->role);
+        hdr->address = BT_RFCOMM_SET_ADDR(dlci, cr);
+        hdr->control = BT_RFCOMM_SET_CTRL(BT_RFCOMM_UA,
+        hdr->length = BT_RFCOMM_SET_LEN_8(0);
+    + rfcomm_dlc_connected(dlc);
+      + dlc->state = BT_RFCOMM_STATE_CONNECTED;
+      + rfcomm_send_msc(dlc, BT_RFCOMM_MSG_CMD_CR);
+      + k_thread_spawn(dlc->stack, sizeof(dlc->stack), rfcomm_dlc_tx_thread,
+      + dlc->ops->connected(dlc);
+      + .connected = hfp_hf_connected,
+        + struct bt_hfp_hf *hf = CONTAINER_OF(dlc, struct bt_hfp_hf, rfcomm_dlc);
+        + hf_slc_establish(hf);
+          + err = hfp_hf_send_cmd(hf, brsf_resp, brsf_finish, "AT+BRSF=%u",
+            + at_register(&hf->at, resp, finish);
+            + ret = bt_rfcomm_dlc_send(&hf->rfcomm_dlc, buf);
+              + net_buf_put(&dlc->tx_queue, buf);
+  + case BT_RFCOMM_UIH:
+    + rfcomm_handle_msg(session, buf);
+    + rfcomm_handle_data(session, buf, dlci,
+      + dlc = rfcomm_dlcs_lookup_dlci(session->dlcs, dlci);
+      + dlc->ops->recv(dlc, buf);
+      + static void hfp_hf_recv(struct bt_rfcomm_dlc *dlc, struct net_buf *buf)
+  + case BT_RFCOMM_DISC:
+    + rfcomm_handle_disc(session, dlci);
+  + case BT_RFCOMM_UA:
+    + rfcomm_handle_ua(session, dlci);
+  + case BT_RFCOMM_DM:
+    + rfcomm_handle_dm(session, dlci);
+****** rfcomm_accept
++ session = rfcomm_session_new(BT_RFCOMM_ROLE_ACCEPTOR);
+  + static struct bt_l2cap_chan_ops ops = {
+    .connected = rfcomm_connected,
+    .disconnected = rfcomm_disconnected,
+    .recv = rfcomm_recv,
+    .encrypt_change = rfcomm_encrypt_change,
+  + struct bt_rfcomm_session *session = &bt_rfcomm_pool[i];
+  + session->br_chan.chan.ops = &ops;
+    session->br_chan.rx.mtu	= CONFIG_BLUETOOTH_RFCOMM_L2CAP_MTU;
+    session->state = BT_RFCOMM_STATE_INIT;
+    session->role = role;
+
+****** bt_l2cap_br_connected
++ if (fchan->accept(conn, &chan) < 0) {
++ rfcomm_accept
+  + session = rfcomm_session_new(BT_RFCOMM_ROLE_ACCEPTOR);
+    + static struct bt_l2cap_chan_ops ops = {
+      .connected = rfcomm_connected,
+      .disconnected = rfcomm_disconnected,
+      .recv = rfcomm_recv,
+      .encrypt_change = rfcomm_encrypt_change,
+    + struct bt_rfcomm_session *session = &bt_rfcomm_pool[i];
+    + session->br_chan.chan.ops = &ops;
+      session->br_chan.rx.mtu	= CONFIG_BLUETOOTH_RFCOMM_L2CAP_MTU;
+      session->state = BT_RFCOMM_STATE_INIT;
+      session->role = role;
+  + l2cap_br_chan_add(conn, chan, NULL)
+    + struct bt_l2cap_br_chan *ch = l2cap_br_chan_alloc_cid(conn, chan);
+    + bt_l2cap_chan_add(conn, chan, destroy);
+  + connect_fixed_channel(ch);
+    + chan->chan.ops->connected(&chan->chan);
+    + rfcomm_connected
+      + rfcomm_send_sabm(session, 0);
+******  bt_l2cap_br_recv(struct bt_conn *conn, struct net_buf *buf)
++ cid = sys_le16_to_cpu(hdr->cid);
++ chan = bt_l2cap_br_lookup_rx_cid(conn, cid);
++ check_fixed_channel(chan);
++ chan->ops->recv(chan, buf);
++ rfcomm_recv,
+  + struct bt_rfcomm_session *session = RFCOMM_SESSION(chan);
+  + dlci = BT_RFCOMM_GET_DLCI(hdr->address);
+  + frame_type = BT_RFCOMM_GET_FRAME_TYPE(hdr->control);
+  + rfcomm_check_fcs(fcs_len, buf->data, fcs)
+  + switch (frame_type) {
+  + case BT_RFCOMM_SABM:
+  + rfcomm_handle_sabm(session, dlci);
+    + dlc = rfcomm_dlcs_lookup_dlci(session->dlcs, dlci);
+    + dlc = rfcomm_dlc_accept(session, dlci);
+      + channel = BT_RFCOMM_GET_CHANNEL(dlci);
+      + server = rfcomm_server_lookup_channel(channel);
+      + server->accept(session->br_chan.chan.conn, &dlc) < 0) {
+      + static int bt_hfp_hf_accept(struct bt_conn *conn, struct bt_rfcomm_dlc **dlc)
+        + static struct bt_rfcomm_dlc_ops ops = {
+          .connected = hfp_hf_connected,
+          .disconnected = hfp_hf_disconnected,
+          .recv = hfp_hf_recv,
+        + struct bt_hfp_hf *hf = &bt_hfp_hf_pool[i];
+          hf->at.buf = hf->hf_buffer;
+          hf->at.buf_max_len = HF_MAX_BUF_LEN;
+          hf->rfcomm_dlc.ops = &ops;
+          hf->rfcomm_dlc.mtu = BLUETOOTH_HFP_MAX_MTU;
+          *dlc = &hf->rfcomm_dlc;
+      + rfcomm_dlc_init(dlc, session, dlci, BT_RFCOMM_ROLE_ACCEPTOR);
+        + dlc->dlci = dlci;
+          dlc->session = session;
+          dlc->rx_credit = RFCOMM_DEFAULT_CREDIT;
+          dlc->state = BT_RFCOMM_STATE_INIT;
+          dlc->role = role;
+    + result = rfcomm_dlc_security(dlc);
+    + rfcomm_send_ua(session, dlci) < 0) {
+      + buf = bt_l2cap_create_pdu(&rfcomm_session_pool, K_FOREVER);
+      + cr = BT_RFCOMM_RESP_CR(session->role);
+        hdr->address = BT_RFCOMM_SET_ADDR(dlci, cr);
+        hdr->control = BT_RFCOMM_SET_CTRL(BT_RFCOMM_UA,
+        hdr->length = BT_RFCOMM_SET_LEN_8(0);
+    + rfcomm_dlc_connected(dlc);
+      + dlc->state = BT_RFCOMM_STATE_CONNECTED;
+      + rfcomm_send_msc(dlc, BT_RFCOMM_MSG_CMD_CR);
+      + k_thread_spawn(dlc->stack, sizeof(dlc->stack), rfcomm_dlc_tx_thread,
+      + dlc->ops->connected(dlc);
+      + .connected = hfp_hf_connected,
+        + struct bt_hfp_hf *hf = CONTAINER_OF(dlc, struct bt_hfp_hf, rfcomm_dlc);
+        + hf_slc_establish(hf);
+          + err = hfp_hf_send_cmd(hf, brsf_resp, brsf_finish, "AT+BRSF=%u",
+            + at_register(&hf->at, resp, finish);
+            + ret = bt_rfcomm_dlc_send(&hf->rfcomm_dlc, buf);
+              + net_buf_put(&dlc->tx_queue, buf);
+  + case BT_RFCOMM_UIH:
+    + rfcomm_handle_msg(session, buf);
+    + rfcomm_handle_data(session, buf, dlci,
+  + case BT_RFCOMM_DISC:
+    + rfcomm_handle_disc(session, dlci);
+  + case BT_RFCOMM_UA:
+    + rfcomm_handle_ua(session, dlci);
+  + case BT_RFCOMM_DM:
+    + rfcomm_handle_dm(session, dlci);
+
+****** bt_rfcomm_init
++ static struct bt_l2cap_server server = {
+               .psm       = BT_L2CAP_PSM_RFCOMM,
+               .accept    = rfcomm_accept,
+               .sec_level = BT_SECURITY_LOW,
++ bt_l2cap_br_server_register(&server);
+
+***** gap/gatt
+****** doc
+Bluetooth Low Energy 介绍 低功耗蓝牙介绍
+http://www.cnblogs.com/cb168/articles/4844010.html
+
+|ANP| Alert Notification Profile|
+| ANS| Alert Notification Service|
+| BAS| Battery Service|
+| BLP| Blood Pressure Profile|
+| BLS| Blood Pressure Service|
+| CPP| Cycling Power Profile|
+| CPS| Cycling Power Service|
+| CSCP| Cycling Speed and Cadence Profile|
+| CSCS| Cycling Speed and Cadence Service|
+| CTS| Current Time Service|
+| DIS| Device Information Service|
+| FMP| Find Me Profile|
+| GLP| Glucose Profile|
+|HIDS| HID Service|
+| HOGP| HID over GATT Profile|
+| HTP| Health Thermometer Profile|
+| HTS| Health Thermometer Service|
+| HRP| Heart Rate Profile|
+| HRS| Heart Rate Service|
+| IAS| Immediate Alert Service|
+| LLS| Link Loss Service|
+| LNP| Location and Navigation Profile|
+| LNS| Location and Navigation Service|
+| NDCS| Next DST Change Service|
+| PASP| Phone Alert Status Profile|
+| PASS| Phone Alert Status Service|
+| PXP| Proximity Profile|
+| RSCP| Running Speed and Cadence Profile|
+| RSCS| Running Speed and Cadence Service|
+|RTUS| Reference Time Update Service|
+| ScPP| Scan Parameters Profile|
+| ScPS| Scan Parameters Service|
+| TIP| Time Profile|
+| TPS| Tx Power Service |
+****** peripheral_hids/main
++ gap_init(DEVICE_NAME, HOG_APPEARANCE);
+  + gap_name = name;
+  + gap_appearance = appearance;
+  + bt_gatt_register(attrs, ARRAY_SIZE(attrs));
+    + int bt_gatt_register(struct bt_gatt_attr *attrs, size_t count)
+    + static struct bt_gatt_attr *db;
+    + db = attrs;
+    + attrs->handle = ++handle;
++ bas_init();
+  + bt_gatt_register(attrs, ARRAY_SIZE(attrs));
++ dis_init(CONFIG_SOC, "Manufacturer");
+  + bt_gatt_register(attrs, ARRAY_SIZE(attrs));
++ hog_init();
+****** bt_att_accept
++       static struct bt_l2cap_chan_ops ops = {
+   .connected = bt_att_connected,
+   .disconnected = bt_att_disconnected,
+   .recv = bt_att_recv,
++ for (i = 0; i < ARRAY_SIZE(bt_req_pool); i++) {
++ att->chan.chan.ops = &ops;
++ *chan = &att->chan.chan;
+****** bt_att_connected
++ bt_gatt_connected(ch->chan.conn);
+  + bt_gatt_foreach_attr(0x0001, 0xffff, connected_cb, conn);
+    + for (attr = db; attr; attr = bt_gatt_attr_next(attr)) {
+    + if (func(attr, user_data) == BT_GATT_ITER_STOP) {
+      + static uint8_t connected_cb(const struct bt_gatt_attr *attr, void *user_data)
+****** bt_att_recv
++ for (i = 0; i < ARRAY_SIZE(handlers); i++) {
++ err = handlers[i].func(att, buf);
+******* handlers
+static const struct {
+        uint8_t  op;
+        uint8_t  (*func)(struct bt_att *att, struct net_buf *buf);
+        uint8_t  expect_len;
+} handlers[] = {
++ { BT_ATT_OP_ERROR_RSP, att_error_rsp,
++ { BT_ATT_OP_MTU_REQ, att_mtu_req,
++ { BT_ATT_OP_MTU_RSP, att_mtu_rsp,
++ { BT_ATT_OP_FIND_INFO_REQ, att_find_info_req,
++ { BT_ATT_OP_FIND_INFO_RSP, att_handle_find_info_rsp,
++ { BT_ATT_OP_FIND_TYPE_REQ, att_find_type_req,
++ { BT_ATT_OP_FIND_TYPE_RSP, att_handle_find_type_rsp,
++ { BT_ATT_OP_READ_TYPE_REQ, att_read_type_req,
++ { BT_ATT_OP_READ_TYPE_RSP, att_handle_read_type_rsp,
+******* { BT_ATT_OP_READ_REQ, att_read_req,
+  + handle = sys_le16_to_cpu(req->handle);
+  + att_read_rsp(att, BT_ATT_OP_READ_REQ, BT_ATT_OP_READ_RSP,
+  + struct read_data data;
+  + data.buf = bt_att_create_pdu(conn, rsp, 0);
+  + data.att = att;
+    data.offset = offset;
+  + bt_gatt_foreach_attr(handle, handle, read_cb, &data);
+    + static uint8_t read_cb(const struct bt_gatt_attr *attr, void *user_data)
+    + data->rsp = net_buf_add(data->buf, sizeof(*data->rsp));
+    + data->err = check_perm(conn, attr, BT_GATT_PERM_READ_MASK);
+    + read = attr->read(conn, attr, data->buf->data + data->buf->len,
+    + net_buf_add(data->buf, read);
+  + bt_l2cap_send(conn, BT_L2CAP_CID_ATT, data.buf);
++ { BT_ATT_OP_READ_RSP, att_handle_read_rsp,
++ { BT_ATT_OP_READ_BLOB_REQ, att_read_blob_req,
++ { BT_ATT_OP_READ_BLOB_RSP, att_handle_read_blob_rsp,
++ { BT_ATT_OP_READ_MULT_REQ, att_read_mult_req,
++ { BT_ATT_OP_READ_MULT_RSP, att_handle_read_mult_rsp,
++ { BT_ATT_OP_READ_GROUP_REQ, att_read_group_req,
++ { BT_ATT_OP_WRITE_REQ, att_write_req,
++ { BT_ATT_OP_WRITE_RSP, att_handle_write_rsp, 0 },
++ { BT_ATT_OP_PREPARE_WRITE_REQ, att_prepare_write_req,
++ { BT_ATT_OP_PREPARE_WRITE_RSP, att_handle_prepare_write_rsp,
++ { BT_ATT_OP_EXEC_WRITE_REQ, att_exec_write_req,
++ { BT_ATT_OP_EXEC_WRITE_RSP, att_handle_exec_write_rsp, 0 },
++ { BT_ATT_OP_NOTIFY, att_notify,
++ { BT_ATT_OP_INDICATE, att_indicate,
++ { BT_ATT_OP_CONFIRM, att_confirm, 0 },
++ { BT_ATT_OP_WRITE_CMD, att_write_cmd,
++ { BT_ATT_OP_SIGNED_WRITE_CMD, att_signed_write_cmd,
+***** beacon
++ main
+  + bt_enable(bt_ready);
+  +
+
+***** hci_core
+****** doc
+蓝牙核心技术概述（四）：蓝牙协议规范（HCI、L2CAP、SDP、RFOCMM）
+http://blog.csdn.net/xubin341719/article/details/38305331
+****** bt_enable
++ struct bt_dev bt_dev = {
+        .ncmd_sem      = K_SEM_INITIALIZER(bt_dev.ncmd_sem, 1, 1),
+        .cmd_tx_queue  = K_FIFO_INITIALIZER(bt_dev.cmd_tx_queue),
+        .rx_queue      = K_FIFO_INITIALIZER(bt_dev.rx_queue),
+
++ bt_enable(bt_ready);
+  + k_thread_spawn(cmd_tx_thread_stack, sizeof(cmd_tx_thread_stack),
+                     (k_thread_entry_t)hci_cmd_tx_thread, NULL, NULL, NULL,
+  + k_thread_spawn(rx_thread_stack, sizeof(rx_thread_stack),
+                    (k_thread_entry_t)hci_rx_thread, cb, NULL, NULL,
+
+****** bt_hci_cmd_send_sync
+int bt_hci_cmd_send_sync(uint16_t opcode, struct net_buf *buf,
++ buf = bt_hci_cmd_create(opcode, 0);
+  + buf = net_buf_alloc(&hci_cmd_pool, K_FOREVER);
+  + cmd(buf)->type = BT_BUF_CMD;
+        cmd(buf)->opcode = opcode;
+        cmd(buf)->sync = NULL;
+        hdr = net_buf_add(buf, sizeof(*hdr));
+        hdr->opcode = sys_cpu_to_le16(opcode);
+        hdr->param_len = param_len;
++ k_sem_init(&sync_sem, 0, 1);
+        cmd(buf)->sync = &sync_sem;
++ net_buf_put(&bt_dev.cmd_tx_queue, buf);
++ k_sem_take(&sync_sem, K_FOREVER);
+****** bt_conn_init();
+    + bt_att_init();
+      + static struct bt_l2cap_fixed_chan chan = {
+         .cid		= BT_L2CAP_CID_ATT,
+         .accept		= bt_att_accept,
+      + bt_l2cap_le_fixed_chan_register(&chan);
+        + chan->_next = le_channels;
+        + channels = chan;
+    + bt_smp_init();
+      + static struct bt_l2cap_fixed_chan chan = {
+            .cid		= BT_L2CAP_CID_SMP,
+            .accept		= bt_smp_accept,
+      + bt_l2cap_le_fixed_chan_register(&chan);
+      + static struct bt_l2cap_fixed_chan br_chan = {
+                    .cid		= BT_L2CAP_CID_BR_SMP,
+                    .accept		= bt_smp_br_accept,
+      + bt_l2cap_br_fixed_chan_register(&br_chan);
+      + static struct bt_pub_key_cb pub_key_cb = {
+            .func           = bt_smp_pkey_ready,
+      + bt_pub_key_gen(&pub_key_cb);
+        + new_cb->_next = pub_key_cb;
+        + pub_key_cb = new_cb;
+        + bt_hci_cmd_send_sync(BT_HCI_OP_LE_P256_PUBLIC_KEY, NULL, NULL);
+        + cb->func(NULL);
+    + bt_l2cap_init();
+      + static struct bt_l2cap_fixed_chan chan = {
+            .cid	= BT_L2CAP_CID_LE_SIG,
+            .accept	= l2cap_accept,
+      + bt_l2cap_le_fixed_chan_register(&chan);
+      + bt_l2cap_br_init();
+        + static struct bt_l2cap_fixed_chan chan_br = {
+                    .cid	= BT_L2CAP_CID_BR_SIG,
+                    .accept = l2cap_br_accept,
+        + bt_l2cap_br_fixed_chan_register(&chan_br);
+        + bt_rfcomm_init();
+          + static struct bt_l2cap_server server = {
+           .psm       = BT_L2CAP_PSM_RFCOMM,
+           .accept    = rfcomm_accept,
+           .sec_level = BT_SECURITY_LOW,
+          + bt_l2cap_br_server_register(&server);
+            + l2cap_br_server_lookup_psm(server->psm)
+            + server->_next = br_servers;
+            + br_servers = server;
+        + bt_avdtp_init();
+          + static struct bt_l2cap_server avdtp_l2cap = {
+             .psm = BT_L2CAP_PSM_AVDTP,
+             .sec_level = BT_SECURITY_MEDIUM,
+             .accept = bt_avdtp_l2cap_accept,
+          + bt_l2cap_br_server_register(&avdtp_l2cap);
+        + bt_sdp_init();
+          + static struct bt_l2cap_server server = {
+              .psm = SDP_PSM,
+              .accept = bt_sdp_accept,
+          + bt_l2cap_br_server_register(&server);
+        + bt_a2dp_init();
+          + bt_avdtp_register(& avdtp_cb);
+            + event_cb = cb;
+    + background_scan_init();
+****** hci_rx_thread
+  + static void hci_rx_thread(bt_ready_cb_t ready_cb)
+    + ready_cb(bt_init());//用户回调
+      + static int bt_init(void)
+        + bt_hci_ecc_init();
+        + err = drv->open();
+          + static int h4_open(void)
+        + err = hci_init();
+          + common_init();
+            + bt_hci_cmd_send_sync(BT_HCI_OP_RESET, NULL, &rsp);
+            + hci_reset_complete(rsp);
+              + atomic_set(bt_dev.flags, BIT(BT_DEV_ENABLE));
+            + prng_init(&prng);
+            + bt_hci_cmd_send_sync(BT_HCI_OP_READ_LOCAL_FEATURES, NULL, &rsp);
+            + read_local_features_complete(rsp);
+              + struct bt_hci_rp_read_local_features *rp = (void *)buf->data;
+              + memcpy(bt_dev.features[0], rp->features, sizeof(bt_dev.features[0]));
+            + bt_hci_cmd_send_sync(BT_HCI_OP_READ_LOCAL_VERSION_INFO, NULL,
+            + read_local_ver_complete(rsp);
+              + bt_dev.hci_version = rp->hci_version;
+              + bt_dev.hci_revision = sys_le16_to_cpu(rp->hci_revision);
+              + bt_dev.lmp_version = rp->lmp_version;
+              + bt_dev.lmp_subversion = sys_le16_to_cpu(rp->lmp_subversion);
+              + bt_dev.manufacturer = sys_le16_to_cpu(rp->manufacturer);
+            + bt_hci_cmd_send_sync(BT_HCI_OP_READ_BD_ADDR, NULL, &rsp);
+            + read_bdaddr_complete(rsp);
+              + bt_addr_copy(&bt_dev.id_addr.a, &rp->bdaddr);
+              + bt_dev.id_addr.type = BT_ADDR_LE_PUBLIC;
+            + bt_hci_cmd_send_sync(BT_HCI_OP_READ_SUPPORTED_COMMANDS, NULL,
+            + set_flow_control();
+              + bt_hci_cmd_create(BT_HCI_OP_HOST_BUFFER_SIZE,
+              + struct bt_hci_cp_host_buffer_size *hbs;
+              + hbs->acl_amtu = sys_cpu_to_le16(CONFIG_BLUETOOTH_L2CAP_IN_MTU +
+              + hbs->acl_pkts = sys_cpu_to_le16(CONFIG_BLUETOOTH_ACL_IN_COUNT);
+              + err = bt_hci_cmd_send_sync(BT_HCI_OP_HOST_BUFFER_SIZE, buf, NULL);
+              + buf = bt_hci_cmd_create(BT_HCI_OP_SET_CTL_TO_HOST_FLOW, 1);
+          + le_init();
+            + bt_hci_cmd_send_sync(BT_HCI_OP_LE_READ_LOCAL_FEATURES, NULL,
+            + read_le_features_complete(rsp);
+              + struct bt_hci_rp_le_read_local_features *rp = (void *)buf->data;
+              + memcpy(bt_dev.le.features, rp->features, sizeof(bt_dev.le.features));
+            + bt_hci_cmd_send_sync(BT_HCI_OP_LE_READ_BUFFER_SIZE, NULL, &rsp);
+            + le_read_buffer_size_complete(rsp);
+              + bt_dev.le.mtu = sys_le16_to_cpu(rp->le_max_len);
+              + k_sem_init(&bt_dev.le.pkts, rp->le_max_num, rp->le_max_num);
+            + if (BT_FEAT_BREDR(bt_dev.features)) {
+              + bt_hci_cmd_send_sync(BT_HCI_OP_LE_WRITE_LE_HOST_SUPP, buf,
+            + bt_hci_cmd_send_sync(BT_HCI_OP_LE_READ_SUPP_STATES, NULL,
+            + bt_hci_cmd_create(BT_HCI_OP_LE_SET_EVENT_MASK, sizeof(*cp_mask));
+              + struct bt_hci_cp_le_set_event_mask *cp_mask;
+            + bt_hci_cmd_send_sync(BT_HCI_OP_LE_SET_EVENT_MASK, buf, NULL);
+          + br_init();
+            + bt_hci_cmd_send_sync(BT_HCI_OP_READ_BUFFER_SIZE, NULL, &buf);
+            + read_buffer_size_complete(buf);
+              + bt_dev.br.mtu = sys_le16_to_cpu(rp->acl_max_len);
+              + k_sem_init(&bt_dev.br.pkts, pkts, pkts);
+            + bt_hci_cmd_send_sync(BT_HCI_OP_WRITE_SSP_MODE, buf, NULL);
+            + bt_hci_cmd_send_sync(BT_HCI_OP_WRITE_INQUIRY_MODE, buf, NULL);
+            + bt_hci_cmd_send_sync(BT_HCI_OP_WRITE_LOCAL_NAME, buf, NULL);
+            + bt_hci_cmd_send_sync(BT_HCI_OP_WRITE_PAGE_TIMEOUT, buf, NULL);
+            + if (BT_FEAT_SC(bt_dev.features)) {
+              + bt_hci_cmd_send_sync(BT_HCI_OP_WRITE_SC_HOST_SUPP, buf,
+          + set_static_addr();
+            + bt_storage->read(NULL, BT_STORAGE_ID_ADDR,
+            + bt_addr_le_create_static(&bt_dev.id_addr);
+              + create_random_addr(addr);
+              + BT_ADDR_SET_STATIC(&addr->a);
+            + set_random_address(&bt_dev.id_addr.a);
+              + bt_hci_cmd_send_sync(BT_HCI_OP_LE_SET_RANDOM_ADDRESS, buf, NULL);
+          + show_dev_info();
+        + err = bt_conn_init();
+          + bt_att_init();
+            + static struct bt_l2cap_fixed_chan chan = {
+               .cid		= BT_L2CAP_CID_ATT,
+               .accept		= bt_att_accept,
+            + bt_l2cap_le_fixed_chan_register(&chan);
+              + chan->_next = le_channels;
+              + channels = chan;
+          + bt_smp_init();
+            + static struct bt_l2cap_fixed_chan chan = {
+                  .cid		= BT_L2CAP_CID_SMP,
+                  .accept		= bt_smp_accept,
+            + bt_l2cap_le_fixed_chan_register(&chan);
+            + static struct bt_l2cap_fixed_chan br_chan = {
+                          .cid		= BT_L2CAP_CID_BR_SMP,
+                          .accept		= bt_smp_br_accept,
+            + bt_l2cap_br_fixed_chan_register(&br_chan);
+            + static struct bt_pub_key_cb pub_key_cb = {
+                  .func           = bt_smp_pkey_ready,
+            + bt_pub_key_gen(&pub_key_cb);
+              + new_cb->_next = pub_key_cb;
+              + pub_key_cb = new_cb;
+              + bt_hci_cmd_send_sync(BT_HCI_OP_LE_P256_PUBLIC_KEY, NULL, NULL);
+              + cb->func(NULL);
+          + bt_l2cap_init();
+            + static struct bt_l2cap_fixed_chan chan = {
+                  .cid	= BT_L2CAP_CID_LE_SIG,
+                  .accept	= l2cap_accept,
+            + bt_l2cap_le_fixed_chan_register(&chan);
+            + bt_l2cap_br_init();
+              + static struct bt_l2cap_fixed_chan chan_br = {
+                          .cid	= BT_L2CAP_CID_BR_SIG,
+                          .accept = l2cap_br_accept,
+              + bt_l2cap_br_fixed_chan_register(&chan_br);
+              + bt_rfcomm_init();
+                + static struct bt_l2cap_server server = {
+                 .psm       = BT_L2CAP_PSM_RFCOMM,
+                 .accept    = rfcomm_accept,
+                 .sec_level = BT_SECURITY_LOW,
+                + bt_l2cap_br_server_register(&server);
+                  + l2cap_br_server_lookup_psm(server->psm)
+                  + server->_next = br_servers;
+                  + br_servers = server;
+              + bt_avdtp_init();
+                + static struct bt_l2cap_server avdtp_l2cap = {
+                   .psm = BT_L2CAP_PSM_AVDTP,
+                   .sec_level = BT_SECURITY_MEDIUM,
+                   .accept = bt_avdtp_l2cap_accept,
+                + bt_l2cap_br_server_register(&avdtp_l2cap);
+              + bt_sdp_init();
+                + static struct bt_l2cap_server server = {
+                    .psm = SDP_PSM,
+                    .accept = bt_sdp_accept,
+                + bt_l2cap_br_server_register(&server);
+              + bt_a2dp_init();
+                + bt_avdtp_register(& avdtp_cb);
+                  + event_cb = cb;
+          + background_scan_init();
+        + bt_monitor_send(BT_MONITOR_OPEN_INDEX, NULL, 0);
+          + bt_le_scan_update(false);
+    + while (1) {
+      + buf = net_buf_get(&bt_dev.rx_queue, K_FOREVER);
+      + case BT_BUF_ACL_IN:
+        + hci_acl(buf);
+          + handle = sys_le16_to_cpu(hdr->handle);
+          + conn = bt_conn_lookup_handle(acl(buf)->handle);
+            + for (i = 0; i < ARRAY_SIZE(conns); i++) {
+              + return bt_conn_ref(&conns[i]);
+          + bt_conn_recv(conn, buf, flags);
+            + memcpy(net_buf_add(conn->rx, buf->len), buf->data, buf->len);
+                conn->rx_len -= buf->len;
+            + bt_l2cap_recv(conn, buf);
+              + if (conn->type == BT_CONN_TYPE_BR) {
+                bt_l2cap_br_recv(conn, buf);
+              + cid = sys_le16_to_cpu(hdr->cid);
+              + chan = bt_l2cap_le_lookup_rx_cid(conn, cid);
+              + l2cap_chan_recv(chan, buf);
+                + if (L2CAP_LE_CID_IS_DYN(ch->rx.cid)) {
+                  + l2cap_chan_le_recv(ch, buf);
+                + chan->ops->recv(chan, buf);
+      + case BT_BUF_EVT:
+        + hci_event(buf);
+****** l2cap_chan_le_recv
++ chan->_sdu = chan->chan.ops->alloc_buf(&chan->chan);
++ bt_l2cap_chan_disconnect(&chan->chan);
++ chan->chan.ops->recv(&chan->chan, chan->_sdu);
+****** hci_acl
+ + hci_acl(buf);
+   + handle = sys_le16_to_cpu(hdr->handle);
+     + conn = bt_conn_lookup_handle(acl(buf)->handle);
+       + for (i = 0; i < ARRAY_SIZE(conns); i++) {
+         + return bt_conn_ref(&conns[i]);
+     + bt_conn_recv(conn, buf, flags);
+       + memcpy(net_buf_add(conn->rx, buf->len), buf->data, buf->len);
+           conn->rx_len -= buf->len;
+       + bt_l2cap_recv(conn, buf);
+         + if (conn->type == BT_CONN_TYPE_BR) {
+         + bt_l2cap_br_recv(conn, buf);
+           + check_fixed_channel(chan);
+             + if (br_chan->rx.cid < L2CAP_BR_CID_DYN_START) {
+             + connect_fixed_channel(br_chan);
+               + chan->chan.ops->connected(&chan->chan);
+           + chan->ops->recv(chan, buf);
+         + cid = sys_le16_to_cpu(hdr->cid);
+         + chan = bt_l2cap_le_lookup_rx_cid(conn, cid);
+         + l2cap_chan_recv(chan, buf);
+           + if (L2CAP_LE_CID_IS_DYN(ch->rx.cid)) {
+             + l2cap_chan_le_recv(ch, buf);
+           + chan->ops->recv(chan, buf);
+             + .recv = l2cap_recv,
+****** le_conn_req
+  + le_conn_req(l2cap, hdr->ident, buf);
+    + psm = sys_le16_to_cpu(req->psm);
+      scid = sys_le16_to_cpu(req->scid);
+      mtu = sys_le16_to_cpu(req->mtu);
+      mps = sys_le16_to_cpu(req->mps);
+      credits = sys_le16_to_cpu(req->credits);
+    + server = l2cap_server_lookup_psm(psm);
+    + if (conn->sec_level < server->sec_level) {
+    + if (server->accept(conn, &chan) < 0) { //server
+    + l2cap_chan_add(conn, chan, l2cap_chan_destroy)
+      + struct bt_l2cap_le_chan *ch = l2cap_chan_alloc_cid(conn, chan);
+      + bt_l2cap_chan_add(conn, chan, destroy);
+    + l2cap_chan_tx_init(ch);
+        ch->tx.cid = scid;
+        ch->tx.mps = mps;
+        ch->tx.mtu = mtu;
+        l2cap_chan_tx_give_credits(ch, credits);
+        l2cap_chan_rx_init(ch);
+        l2cap_chan_rx_give_credits(ch, L2CAP_LE_MAX_CREDITS);
+        chan->psm = server->psm;
+    + bt_l2cap_chan_set_state(chan, BT_L2CAP_CONNECTED);
+      + chan->state = state;
+    + if (chan->ops && chan->ops->connected) {
+                        chan->ops->connected(chan); //server
+    + bt_l2cap_send(conn, BT_L2CAP_CID_LE_SIG, buf);
+
+****** l2cap_recv(struct bt_l2cap_chan *chan, struct net_buf *buf)
++ case BT_L2CAP_CONN_PARAM_RSP:
+  + le_conn_param_rsp(l2cap, buf);
++ case BT_L2CAP_CONN_PARAM_REQ:
+  + le_conn_param_update_req(l2cap, hdr->ident, buf);
++ case BT_L2CAP_LE_CONN_REQ:
+  + le_conn_req(l2cap, hdr->ident, buf);
+    + psm = sys_le16_to_cpu(req->psm);
+      scid = sys_le16_to_cpu(req->scid);
+      mtu = sys_le16_to_cpu(req->mtu);
+      mps = sys_le16_to_cpu(req->mps);
+      credits = sys_le16_to_cpu(req->credits);
+    + server = l2cap_server_lookup_psm(psm);
+    + if (conn->sec_level < server->sec_level) {
+    + if (server->accept(conn, &chan) < 0) {
+    + l2cap_chan_add(conn, chan, l2cap_chan_destroy)
+      + struct bt_l2cap_le_chan *ch = l2cap_chan_alloc_cid(conn, chan);
+      + bt_l2cap_chan_add(conn, chan, destroy);
+    + l2cap_chan_tx_init(ch);
+        ch->tx.cid = scid;
+        ch->tx.mps = mps;
+        ch->tx.mtu = mtu;
+        l2cap_chan_tx_give_credits(ch, credits);
+        l2cap_chan_rx_init(ch);
+        l2cap_chan_rx_give_credits(ch, L2CAP_LE_MAX_CREDITS);
+        chan->psm = server->psm;
+    + bt_l2cap_chan_set_state(chan, BT_L2CAP_CONNECTED);
+      + chan->state = state;
+    + if (chan->ops && chan->ops->connected) {
+                        chan->ops->connected(chan); //server
+    + bt_l2cap_send(conn, BT_L2CAP_CID_LE_SIG, buf);
++ case BT_L2CAP_LE_CONN_RSP:
+  + le_conn_rsp(l2cap, hdr->ident, buf);
++ case BT_L2CAP_DISCONN_REQ:
+  + le_disconn_req(l2cap, hdr->ident, buf);
++ case BT_L2CAP_DISCONN_RSP:
+  + le_disconn_rsp(l2cap, hdr->ident, buf);
++ case BT_L2CAP_LE_CREDITS:
+  + le_credits(l2cap, hdr->ident, buf);
++ case BT_L2CAP_CMD_REJECT:
+  + reject_cmd(l2cap, hdr->ident, buf);
+****** le_conn_complete
+     + le_conn_complete(buf);
+       + id_addr = find_id_addr(&evt->peer_addr);
+       + conn = bt_conn_lookup_state_le(id_addr, BT_CONN_CONNECT);
+       + atomic_clear_bit(bt_dev.flags, BT_DEV_ADVERTISING);
+       + conn->handle   = handle;
+         bt_addr_le_copy(&conn->le.dst, id_addr);
+         conn->le.interval = sys_le16_to_cpu(evt->interval);
+         conn->le.latency = sys_le16_to_cpu(evt->latency);
+         conn->le.timeout = sys_le16_to_cpu(evt->supv_timeout);
+         conn->role = evt->role;
+       + if (conn->role == BT_HCI_ROLE_SLAVE) {
+         bt_addr_le_copy(&conn->le.init_addr, &evt->peer_addr);
+         bt_addr_le_copy(&conn->le.resp_addr, &bt_dev.id_addr);
+       + bt_conn_set_state(conn, BT_CONN_CONNECTED);
+         + case BT_CONN_CONNECTED:
+         + k_fifo_init(&conn->tx_queue);
+         + k_thread_spawn(conn->stack, sizeof(conn->stack), conn_tx_thread,
+         + bt_l2cap_connected(conn);
+           + fchan = le_channels;
+           + if (fchan->accept(conn, &chan) < 0) {
+             + .accept	= l2cap_accept,// channel
+               + static struct bt_l2cap_chan_ops ops = {
+                 .connected = l2cap_connected,
+                 .disconnected = l2cap_disconnected,
+                 .recv = l2cap_recv,
+               + l2cap->chan.chan.ops = &ops;
+                 *chan = &l2cap->chan.chan;
+           + l2cap_chan_add(conn, chan, NULL)
+             + struct bt_l2cap_le_chan *ch = l2cap_chan_alloc_cid(conn, chan);
+             + bt_l2cap_chan_add(conn, chan, destroy);
+           + chan->ops->connected(chan);
+             + l2cap_connected(struct bt_l2cap_chan *chan)
+         + notify_connected(conn);
+           + for (cb = callback_list; cb; cb = cb->_next) {
+             + cb->connected(conn, conn->err);
+****** hci_event
+        + br/edr
+          + case BT_HCI_EVT_CONN_REQUEST:
+                  conn_req(buf);
+          + case BT_HCI_EVT_CONN_COMPLETE:
+                  conn_complete(buf);
+          + case BT_HCI_EVT_PIN_CODE_REQ:
+                  pin_code_req(buf);
+          + case BT_HCI_EVT_LINK_KEY_NOTIFY:
+                  link_key_notify(buf);
+          + case BT_HCI_EVT_LINK_KEY_REQ:
+                  link_key_req(buf);
+          + case BT_HCI_EVT_IO_CAPA_RESP:
+                  io_capa_resp(buf);
+          + case BT_HCI_EVT_IO_CAPA_REQ:
+                  io_capa_req(buf);
+          + case BT_HCI_EVT_SSP_COMPLETE:
+                  ssp_complete(buf);
+          + case BT_HCI_EVT_USER_CONFIRM_REQ:
+                  user_confirm_req(buf);
+          + case BT_HCI_EVT_USER_PASSKEY_NOTIFY:
+                  user_passkey_notify(buf);
+          + case BT_HCI_EVT_USER_PASSKEY_REQ:
+                  user_passkey_req(buf);
+          + case BT_HCI_EVT_INQUIRY_COMPLETE:
+                  inquiry_complete(buf);
+          + case BT_HCI_EVT_INQUIRY_RESULT_WITH_RSSI:
+                  inquiry_result_with_rssi(buf);
+          + case BT_HCI_EVT_EXTENDED_INQUIRY_RESULT:
+                  extended_inquiry_result(buf);
+          + case BT_HCI_EVT_REMOTE_NAME_REQ_COMPLETE:
+                  remote_name_request_complete(buf);
+          + case BT_HCI_EVT_AUTH_COMPLETE:
+                  auth_complete(buf);
+          + case BT_HCI_EVT_REMOTE_FEATURES:
+                  read_remote_features_complete(buf);
+          + case BT_HCI_EVT_REMOTE_EXT_FEATURES:
+                  read_remote_ext_features_complete(buf);
+          + case BT_HCI_EVT_ROLE_CHANGE:
+                  role_change(buf);
+        case BT_HCI_EVT_DISCONN_COMPLETE:
+                hci_disconn_complete(buf);
+        + smp/br
+          + case BT_HCI_EVT_ENCRYPT_CHANGE:
+                  hci_encrypt_change(buf);
+          + case BT_HCI_EVT_ENCRYPT_KEY_REFRESH_COMPLETE:
+                  hci_encrypt_key_refresh_complete(buf);
+        + le
+          + case BT_HCI_EVT_LE_META_EVENT:
+            + hci_le_meta_event(buf);
+              + case BT_HCI_EVT_LE_CONN_COMPLETE:
+                + le_conn_complete(buf);
+                  + id_addr = find_id_addr(&evt->peer_addr);
+                  + conn = bt_conn_lookup_state_le(id_addr, BT_CONN_CONNECT);
+                  + atomic_clear_bit(bt_dev.flags, BT_DEV_ADVERTISING);
+                  + conn->handle   = handle;
+                    bt_addr_le_copy(&conn->le.dst, id_addr);
+                    conn->le.interval = sys_le16_to_cpu(evt->interval);
+                    conn->le.latency = sys_le16_to_cpu(evt->latency);
+                    conn->le.timeout = sys_le16_to_cpu(evt->supv_timeout);
+                    conn->role = evt->role;
+                  + if (conn->role == BT_HCI_ROLE_SLAVE) {
+                    bt_addr_le_copy(&conn->le.init_addr, &evt->peer_addr);
+                    bt_addr_le_copy(&conn->le.resp_addr, &bt_dev.id_addr);
+                  + bt_conn_set_state(conn, BT_CONN_CONNECTED);
+                    + case BT_CONN_CONNECTED:
+                    + k_fifo_init(&conn->tx_queue);
+                    + k_thread_spawn(conn->stack, sizeof(conn->stack), conn_tx_thread,
+                    + bt_l2cap_connected(conn);
+                      + fchan = le_channels;
+                      + if (fchan->accept(conn, &chan) < 0) {
+                        + .accept	= l2cap_accept,
+                          + static struct bt_l2cap_chan_ops ops = {
+                            .connected = l2cap_connected,
+                            .disconnected = l2cap_disconnected,
+                            .recv = l2cap_recv,
+                          + l2cap->chan.chan.ops = &ops;
+                            *chan = &l2cap->chan.chan;
+                      + l2cap_chan_add(conn, chan, NULL)
+                        + struct bt_l2cap_le_chan *ch = l2cap_chan_alloc_cid(conn, chan);
+                        + bt_l2cap_chan_add(conn, chan, destroy);
+                      + chan->ops->connected(chan);
+                        + l2cap_connected(struct bt_l2cap_chan *chan)
+                    + notify_connected(conn);
+                      + for (cb = callback_list; cb; cb = cb->_next) {
+                        + cb->connected(conn, conn->err);
+              + case BT_HCI_EVT_LE_CONN_UPDATE_COMPLETE:
+                + le_conn_update_complete(buf);
+              + case BT_HCI_EV_LE_REMOTE_FEAT_COMPLETE:
+                + le_remote_feat_complete(buf);
+              + case BT_HCI_EVT_LE_CONN_PARAM_REQ:
+                + le_conn_param_req(buf);
+              + case BT_HCI_EVT_LE_LTK_REQUEST:
+                + le_ltk_request(buf);
+              + case BT_HCI_EVT_LE_P256_PUBLIC_KEY_COMPLETE:
+                + le_pkey_complete(buf);
+              + case BT_HCI_EVT_LE_GENERATE_DHKEY_COMPLETE:
+                + le_dhkey_complete(buf);
+              + case BT_HCI_EVT_LE_ADVERTISING_REPORT:
+                + le_adv_report(buf);
+                  + check_pending_conn(addr, &info->addr, info->evt_type);
+****** bt_le_adv_start
++ set_ad(BT_HCI_OP_LE_SET_ADV_DATA, ad, ad_len);
++ bt_hci_cmd_send_sync(BT_HCI_OP_LE_SET_ADV_PARAM, buf, NULL);
++ set_advertise_enable(true);
+  + bt_hci_cmd_send_sync(BT_HCI_OP_LE_SET_ADV_ENABLE, buf, NULL);
++ atomic_set_bit(bt_dev.flags, BT_DEV_KEEP_ADVERTISING);
+
+***** monitor.c
+SYS_INIT(bt_monitor_init, PRE_KERNEL_1, MONITOR_INIT_PRIORITY);
+使用串口来做debug monitor， bluetooht的时间命令都会发往这个串口
+config BLUETOOTH_DEBUG_MONITOR
+config BLUETOOTH_MONITOR_ON_DEV_NAME
+string "Device Name of Bluetooth monitor logging UART"
+
++ void bt_log(int prio, const char *fmt, ...)
+  + bt_monitor_send(BT_MONITOR_SYSTEM_NOTE, buf, len);
+    + monitor_send(&hdr, sizeof(hdr));
+      + uart_poll_out(monitor_dev, *buf++);
+***** h4.c
+****** init
+static struct bt_hci_driver drv = {
+        .name		= "H:4",
+        .bus		= BT_HCI_DRIVER_BUS_UART,
+        .open		= h4_open,
+        .send		= h4_send,
+};
++ SYS_INIT(_bt_uart_init, POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE);
+  + h4_dev = device_get_binding(CONFIG_BLUETOOTH_UART_ON_DEV_NAME);
+    + bt_hci_driver_register(&drv);
+      + bt_dev.drv = drv;
+        + bt_monitor_new_index(BT_MONITOR_TYPE_PRIMARY, drv->bus,
+                                     BT_ADDR_ANY, drv->name ? drv->name : "bt0");
+          + bt_monitor_send(BT_MONITOR_NEW_INDEX, &pkt, sizeof(pkt));
+****** isr
++ static int h4_open(void)
+  + uart_irq_callback_set(h4_dev, bt_uart_isr);
+  + uart_irq_rx_enable(h4_dev);
+
++ static void bt_uart_isr(struct device *unused)
+  + read = h4_read(h4_dev, &type, sizeof(type), 0);
+    + int h4_read(struct device *uart, uint8_t *buf,  size_t len, size_t min)
+      + rx = uart_fifo_read(uart, buf, len);
+  + case H4_EVT:
+  + buf = h4_evt_recv(&remaining);
+    + struct bt_hci_evt_hdr hdr;
+    + h4_read(h4_dev, (void *)&hdr, sizeof(hdr), sizeof(hdr));
+    + *remaining = hdr.len;
+    + buf = bt_buf_get_evt(hdr.evt, K_NO_WAIT);
+  + case H4_ACL:
+  + buf = h4_acl_recv(&remaining);
+    + struct bt_hci_acl_hdr hdr;
+    + h4_read(h4_dev, (void *)&hdr, sizeof(hdr), sizeof(hdr));
+    + buf = bt_buf_get_acl(K_NO_WAIT);
+    + *remaining = sys_le16_to_cpu(hdr.len);
+  + read = h4_read(h4_dev, net_buf_tail(buf), remaining, 0);
+  + bt_recv(buf);
+    + bt_monitor_send(bt_monitor_opcode(buf), buf->data, buf->len);
+    + if (bt_buf_get_type(buf) == BT_BUF_ACL_IN) {
+      + net_buf_put(&bt_dev.rx_queue, buf);
+        + return 0;
+    + case BT_HCI_EVT_CMD_COMPLETE:
+      net_buf_pull(buf, sizeof(*hdr));
+      + hci_cmd_complete(buf);
+        + struct bt_hci_evt_cmd_complete *evt = (void *)buf->data;
+        + hci_cmd_done(opcode, status, buf);
+        + if (cmd(sent)->sync) {        k_sem_give(sem);
+    + case BT_HCI_EVT_CMD_STATUS:
+      net_buf_pull(buf, sizeof(*hdr));
+      + hci_cmd_status(buf);
+    + case BT_HCI_EVT_NUM_COMPLETED_PACKETS:
+      net_buf_pull(buf, sizeof(*hdr));
+      + hci_num_completed_packets(buf);
+
+***** nble
++ DEVICE_INIT(bt_nble, "", _bt_nble_init, NULL, NULL, POST_KERNEL,
+            CONFIG_KERNEL_INIT_PRIORITY_DEVICE);
++ _bt_nble_init(struct device *unused)
+  + nble_dev = device_get_binding(CONFIG_NBLE_UART_ON_DEV_NAME);
+
++ bt_enable(bt_ready_cb_t cb)
+  + nble_open(void)
+    + k_thread_spawn(rx_thread_stack, sizeof(rx_thread_stack),
+                        (k_thread_entry_t)rx_thread,
+      + uart_irq_callback_set(nble_dev, bt_uart_isr);
+
++ bt_uart_isr(struct device *unused)
+  + hdr_bytes += uart_fifo_read(nble_dev,
+  + buf = net_buf_alloc(&rx_pool, K_NO_WAIT);
+  + read = uart_fifo_read(nble_dev, net_buf_tail(buf), hdr.len);
+  + net_buf_put(&rx_queue, buf);
+
++ static void rx_thread(void)
+  + rpc_deserialize(buf);
+    + case SIG_TYPE_S:
+    + deserialize_s(uint8_t fn_index, struct net_buf *buf)
+      + deserialize_struct(buf, &struct_ptr, &struct_length);
+      + m_fct_s[fn_index](struct_data);
+
+***** android bluedroid
+
+*** android bluedroid
+http://blog.csdn.net/xubin341719/article/details/40378205
+
 ** 20170601：平台方向后续规划
-#+TITLE:  20170601：平台方向后续规划
 *** IC情况
 平台的规划主要考虑如下ic平台
 + AP类IC  5202  5211 5209
@@ -11511,10 +12737,6 @@ FreeRTOS平台如果确实有比较强烈的需求，是可以再整理一份的
   请收集齐全主要耳机对手的各种资料和样机，越全越好，我们需要既安排，也亲自学习和评估，然后组织系列报告和讨论来分析对手制订策略，落实每一个细节，只有这样我们才有赢得可能。
 
 ** 20170704研发三部SRD例会报告
-#+TITLE:20170704研发三部SRD例会报告
-#+LATEX_HEADER: \usepackage{xeCJK}
-#+LATEX_HEADER: \setCJKmainfont{STKaiti}
-#+OPTIONS: \n:t todo:nil
 *** 标案项目相关
 **** 3703
 ***** 支持android APK
@@ -11823,10 +13045,6 @@ Total(金额）          $99.2$370.8$483.0$789.0
   + 5119  周晓磊
 
 ** 20170602研发三部SRD例会报告
-#+TITLE:20170602研发三部SRD例会报告
-#+LATEX_HEADER: \usepackage{xeCJK}
-#+LATEX_HEADER: \setCJKmainfont{STKaiti}
-#+OPTIONS: \n:t todo:nil
 *** 标案项目相关
 **** 3703
 + 兼容性测试中测试出一个nand的问题， 补测兼容性，已经证实解决
