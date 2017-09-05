@@ -10248,6 +10248,86 @@ redirected_tty_write
                             spin_unlock_irqrestore(&port->lock, flags);`
 
 * 研发会议
+
+** 0905 方案研发三部会议报告
+*** 标案项目相关
+**** 3703
++ 支持android APK版本已经发布学习版
++ 第二轮送测
++ 联立为9月份试产
+**** 360F
++ BSP开发工作基本完成
++ 正在开发应用层的测试用例
+**** 3503
+主要工作主要集中在客户试产问题解决和需求实现
++ sdio和wifi复用测试完成，读卡性能比usb读卡器好
++ 双系统已完成， 本周测试
++ psram后续测试
++ 蓝牙单系统已经做到WIFI+传统蓝牙， WIFI+BLE共存
+**** s700
++ linux的GPU加速和视频解码支持
+  显示已经可以到主界面，
+  视频部分还未开始
++ 商显和KTV评估
+  双屏异显，多路音频输出
+  HDMI IN 1080p 60fps优化
+**** 5601
++ 搭配5118做语音遥控器，功能已经通了，还有杂音问题在澄清
++ zephyr已经在cordio板上和5601evb跑起来了，待移植5601bank部分，从评估角度，使用cordio evb更方便一些。
++ 蓝牙的BQB测试，
+  测试host controller的固件已经可以
+  profile的PTS测试还未跑起来
+*** 预研相关
+**** 蓝牙mcu协议栈对比
+对比了broadcom WICED BT， zephyr+IVT， 以及zephyr协议栈的情况。
+从资源开销上看， zephyr自带的应该最好， 但传统蓝牙的成熟度最差
+初步确定，5118B按照zephyr自带的协议栈来进行
+**** realtek IOT WIFI
++ 型号为8189fm(FTV)
++ 代码大部分闭源，可移植还好
+  提供了移植接口， 主要是SDIO驱动适配，和OS适配，移植层相对独立，可以考虑自己移植
+  只有arm版本，需要找mips版本才行
++ 资源开销从看到的静态的情况，3503应该可以支持，但不确认动态内存需要多少
+  | module name           | code size | data size | rodata size |
+ | 模组使用的AT命令 | 2,854     |       928 |           0 |
+ | wpa_supplicant        | 16,606    |       208 |       2,763 |
+ | wifi相关API | 11,800    |       796 |         119 |
+ | WIFI驱动 | 136,598   |     7,331 |      63,216 |
+ | lwip协议栈       | 23,452    |    21,380 |         148 |
+ | freertos            | 3,736     |    85,448 |           0 |
+ | stm32f4xx  | 2,184     |        16 |           0 |
+ | 其他              | 5,054     |       542 |          10 |
+**** allwin 871
++ 采用的是FreeRTOS + LWIP协议栈
++ 使用2M nor， 支持OTA双备份
++ 估计大小和3503的主要差异的大头在
+  解码库 3503要 400多k， 对方估计200k？
+  提示音 放在卡上，没有放在nor上
++ 双核架构
+  一个跑OS， 一个跑WIFI
+
+***** 固件结构如下
+NOR型号为PT25F16B， 容量为2MB。分区内容如下：
+| 分区内容       | 分区偏移 | 分区大小 | 实际使用大小 | RAM地址 |
+| BOOT           |      0x0 | 64KB     | 45KB         |  0x7000 |
+| SYSTEM         |  0x10000 | 166KB    | 161KB        | 0x10000 |
+| APP            |  0x39800 | 380KB    | 377KB        |     XIP |
+| Wifi netos?    |  0x98800 | 240KB    | 238KB        |     0x0 |
+| 升级相关？     |  0xd4800 | 5KB      | 3KB          |         |
+| WiFI app?有cmd |  0xd5c00 | 130KB    | 127KB        |         |
+| CONFIG         |  0xf6400 | 39KB     | 1KB          |         |
+
+**** aihora AB1520S
++ cpu使用80251
++ ram 32K
++ 应该是单核架构，蓝牙的一些baseband协议是在ROM+ nor上跑的
+待统计详细数据
+**** Android 版本升级
++ android 8.0已经正式发布，后续安排时间去看
+
+** 0831 庆科
+http://developer.mico.io/developer/md/bWljby1oYW5kYm9vay8yLk1pQ09fdG9vbHMvTWlDT19DdWJlLm1k
+http://www.mxchip.com/product/wifi_product/49
 ** 0728 代码质量会议
 附件中有一个ppt中的一句话说得很到位：代码质量不能完全依靠人来保证，但最终还是依靠人来保证。
 所以， 从不能完全依靠人来保证这个角度来说，是需要使用工具来帮忙的。
@@ -10879,6 +10959,20 @@ hci_rx_thread
   从broadcom平台来看，提供的应用仅仅是demo协议栈使用，比如a2dp收到数据直接丢掉，事件处理仅仅是打印而已。
   而按照我们做产品的经验来看，很多的兼容性问题都是手机等设备不规范，需要应用层解决的，所以这部分的兼容性只能在使用平台的人在做产品的时候解决。
   profile本身的蓝牙协议的兼容性，可以考虑使用sig的协议测试工具来解决。
+** aihora
+*** AB1520S
+**** AB1522S headset configuration tool
+AB1522S Headset configuration tool provides to customers the capability to configure
+the various settings, such as Button I/O, LED behavior, Key operations, and Battery Parameters stored in flash memory. Customer code also can be processed by Airoha’s AB1522S Headset configuration tool. Customers only need to prepare and compile their program by C compiler, and use the tool to automatically generate the binary data into flash memory.
+**** AB1522S Mass-Production tool
+ AB1522S Mass-Production tool is used during customer production stage and it
+provides the capability for downloading/verifying flash memory, testing RF performance, ADC calibration, and updating Bluetooth device address of the headset module. It works with the Airoha provided Test Control Board (TCB) hardware. The Mass-Production tool greatly improves the test and verification efficiency in manufacturing stage.
+
+AB1522S Stereo Solution for Intensive
+Audio Applications Page 34 of 36 CONFIDENTIAL Preliminary Specification
+Version 0.11 Jul-2016
+Confidential
+
 ** 5118B
 *** 平台主要优势
 5118平台相对现在常见的mcu开发平台，主要的优势在于:
@@ -10935,7 +11029,7 @@ hci_rx_thread
     快速入门开发环境建立， api编程手册，工具使用文档
   + 各个模块的设计文档
     这部分根据实际的情况，逐步完成。
-** WICED BT代码结构
+** 0810 WICED BT代码结构
 *** a2dp sink
 **** apps
 ***** APPLICATION_START()
@@ -11314,6 +11408,8 @@ wiced_audio_sink_register_data_cback( void* p_cback );
 *** zephyr bt
 **** bluetooth
 ***** doc
+****** SSP
+http://www.ellisys.com/technology/een_bt07.pdf
 ****** gatt
 Bluetooth Low Energy 介绍 低功耗蓝牙介绍
 http://www.cnblogs.com/cb168/articles/4844010.html
@@ -12345,337 +12441,45 @@ static struct bt_hci_driver drv = {
 *** android bluedroid
 http://blog.csdn.net/xubin341719/article/details/40378205
 
-** 20170601：平台方向后续规划
-*** IC情况
-平台的规划主要考虑如下ic平台
-+ AP类IC  5202  5211 5209
-+ 5116C  5118B  3503 带cache架构的蓝牙IC
-+ 5601 BLE IC
-+ 耳朵IC  cortex M3 + DSP
-+ camera + WIFI小系统
-+ cortex A5 + DSP的眼睛IC
-*** 平台状况
-**** RTOS MIPS平台
-***** 主要适配IC
-+ 3503，后续考虑 5118B，  5116C， 以及将来camera + wifi IC
-***** IC特点
-+ nor base
-+ cache 架构，可以XIP来执行代码
-+ soc内部有限SRAM
-***** 主要SDK诉求
-+ 方便应用开发和debug
-+ Nor 和RAM空间占用要小
-+ 功能方便裁剪以节省NOR和内存
-***** 主要设计决策
-+ kernel使用Zephyr OS，zephyr OS具有以下特点：
-  + 有的代码编译成一个二进制
-     系统中不存在重复代码，可以节省nor的空间
-     没有动态加载的二进制，可以更好防网络攻击
-  + 提供了完整的IOT相关协议栈
-    蓝牙BLE支持
-    WIFI以及网络协议栈支持
-    支持zigbee和路由
-    支持TLS等安全加密库
-  + 提供和很精细的功能可配置
-    可以去除不需要的功能，来减少ram和nor代码占用
-  + 提供驱动模型
-    可以比较好的隔离应用和驱动
-  + 有较好的社区支持，社区开发比较活跃
-+ 全新设计的应用框架
-  + 设计了服务模型，对常见的系统功能（播放，录音，mqtt服务）做成独立的服务，服务独立于应用，可以被多种不同的应用使用
-  + 产品整个功能按照场景进行进行合理划分多个应用，故事机划分成多个功能独立的子模块，由应用管理器来管理，主要应用模块有：播放音乐，后台下载 网络配对  百科问答  微信留言 播放tts  PCBA
-  + 应用，服务，系统之间使用消息传递的通信方式来实现松耦合
-  + 使用steam来封装网络流，文件等数据源，简化应用开发。
-+ 系统级的设计优化
-  + 设计zero copy技术在驱动，网络协议栈，解码，播放共享同一份数据，极大的减少了内存开销。
-  + 设计了避免内存碎片的内存管理方法，从机制上解决碎片问题
-  + 设计overlay机制来让不同的解码格式共享同一块内存
-  + 应用都是互斥运行的，不同的应用实现复用内存。
-  + 精心处理网络策略来在保证网络稳定性的情况下，减少内存占用
-    1. tcp 延迟回复ACK来避免重发
-    2. 发送数据包使用small buffer避免占用更大buffer
-+ 性能和调试的便利性
-  + 支持最新的GCC工具链
-  + 支持标准JTAG工具
-    可以使用业界通用的JTAG调试工具，以及常见的JTAG调试软件，比如gdb， eclipse
-  + 提供功能丰富的串口命令行工具
-    可以通过串口来做系统系能优化，现场debug等，可以查看系统
-    + 设置系统的运行参数
-    + 查看cpu负载
-    + 统计cache miss情况
-    + 查看各个任务的线程栈
-    + 查看内存分配情况，任务栈的使用情况
-    + 网络相关的各个内存buffer情况。
-    + 其他常用的功能
-  + 增加了运行期监控
-    + 检查堆栈溢出
-    + 检查应用的内存泄露
-    + 检查系统的最大关中断时间
-    + 系统panci时，提供调用栈的完整backtrace，并提供符号支持
-***** 不足之处
-+ 由于是mips架构， 目前只能支持GCC编译工具链。
-  不太容易支持Keil，IAR等集成开发，调试的IDE环境
-+ JTAG目前只支持5PIN的，不支持2PIN的SWD
-+ MIPS相对ARM对栈的消耗更多一些，内存需求好高一些
-+ 社区和生态，相对于arm会差比较大，比如不能支持arm mbed OS以及CMSIS DAP等现在更主流的调试方式。
-***** 后续计划
-+ 持续跟踪zephyr的版本跟新和动态
-+ 目前平台已经整合了wifi， BLE 后续需要整合传统l蓝牙功能
-+ 目前应用框架和协议栈都还有一些优化工作需要继续完成
-**** RTOS ARM 平台
-***** 主要适配IC
-+ 5601 耳朵ic， 这里暂时只考虑5601
-***** IC特点
-+ ROM中固化了协议栈，应用框架以及典型的beacon，数传应用
-+ 外挂EEPROM作为规模较小的个性化开发
-+ 外挂Nor来支持更复杂的协议栈和应用场景
-+ 目前TestChip使用了bank架构，后续正式版建议改成cache架构。
-+ Bank架构和cache架构在可开发性上有如下缺点
-  + RODATA 不能够放在nor上，需要占用ram空间
-  + 程序中一些small literals不能放在nor上，需要占用ram空间
-  + 在使用调试器的时候，会看到bank切换这个动作，不能做到完全透明。
-***** 主要SDK诉求
-+ 方便应用开发和debug
-+ EEPROM方案程序需要尽可能的小
-+ Nor方案需要尽可能方便开发
-***** 主要设计决策
-****** EEPROM方案
-+ 尽可能的固化更多代码，固化代码包括：各种驱动，蓝牙协议栈，应用框架。
-+ ROM中固化了了cordio的代码，以降低风险
-+ EEPROM开发只需要编写应用本身逻辑代码，其他部分通过调用ROM中的函数实现。
-****** 外挂NOR 方案
-+ 在优先考虑开放式开发的时候， 可以不使用ROM中固化的代码
-+ 程序代码较大的时候使用bank机制
-+ 可以支持更多的OS平台，比如zephyr，mbed OS
-****** 开发便利性
-+ 支持gcc编译，和标准的jtag调试
-+ 支持KEIL等业界常见的IDE环境，可以支持标准的烧写flash，单步调试等操作
-+ 支持arm的CMSIS DAP调试规范，可以通过一个usb接口同时支持串口，U盘，以及jtag
-+ 使用统一编译的方式，
-  整个程序，包括ROM中的patch代码，蓝牙controller的patch代码都在一个工程内可以编译出来，实现所见即所得的开发模式
-+ 提供了EEPROM和nor上应用开发的样板工程，简化客户应用程序开发
-+ 提供类似业界的主流开发板，以及相应的调试接口
-+ 可以使用keil工具增加我们开发的插件，即可完善支持KEIL IDE
-***** 不足之处
-+ 由于bank架构，所以在程序代码较大的时候， 需要使用bank的时候， 在调试器中能够看到bank切换的过程，从而和真正的EFLASH的调试方式有一些不同
-***** 后续计划
-+ 完善sdk文档
-+ 完善开发板支持
-+ nor方案支持zephyr OS
-+ nor方案支持mbed OS
-**** Linux 音频平台
-***** 主要适配IC
-+ ATS3605 (GL5202E)
-***** IC特点
-+ 4核A5， 55nm， 256M DDR
-+ SLC NAND 或 Nor base
-***** 主要SDK诉求
-+ 可以给算法类公司提供一个比较好的开发平台，比较容易的验证算法
-+ 可以提供给方案公司，可以开发基于音频播放，录音，以及支持网络的类似WIFI音箱的产品
-+ 可以对接比较常见的智能云平台，比如amazon的AVS服务
-***** 主要设计决策
-+ 需要支持标准的linux工具链，以利于算法公司整合第三方开源库
-+ 整合一个标准的比较适合音频的Linux发行版，openWRT
-+ 支持alsa lib等linux比较常用的音频相关库
-+ 支持一个常用的Linux的音频播放框架
-+ 开发一个示例的音频播放程序
-+ 对接上amazon的avs云，以及其他元
-+ 支持WIFI BT等无线功能
-+ BSP尽量规范化，考虑和S700 S900整合到同一个BSP中以方便维护
-***** 后续计划
-标案立项，分两步走：
-1. 基于现有BSP（3703 BSP），整合openWRT，以及支持alsa lib，可以提供给算法公司使用
-2. BSP整合到S700，同时完善需要的其他功能，然后发布
-**** Linux 视频平台
-***** 主要适配IC
-+ ATS3703 (GL5202E)
-***** IC特点
-+ 4核A5， 55nm， 256M DDR
-+ SLC NAND 或 Nor base
-***** 主要SDK诉求
-+ 由于客户熟悉uc平台的开发方式，所以需要api和应用框架都兼容uc
-+ 需要支持SWF格式播放
-+ 支持视频聊天和图像识别
-***** 主要设计决策
-+ 保持和7051同一个BSP
-  不采用LS360X原来的音视频框架和显示框架，原来框架对bsp改动太多，增加了很多非标准的ioctl
-+ 裁剪Android 只剩下NDK中必要的部分，没有java部分。 这样可以复用android平台已经稳定和兼容性没有问题的底层。
-+ 使用andriod NDK的开发方式，适配uc平台原有的应用框架
-+ UI图层叠加仍然只能使用GPU
-+ 移植Android平台的浏览器的FLASH插件，在NDK环境跑起来支持SWF播放
-***** 不足之处
-+ 需要熟悉android NDK的开发或者熟悉我们uc平台的开发方式
-+ 由于使用了android的工具链，不太容易整合标准的Linux的第三方应用程序
-  整合第三方应用库的时候， 需要做一些调整才行。虽然大部分的调整并不大，但也是一个障碍
-***** 后续计划
-+ 会基于这个平台做一些差异化，比如音频+camera类的应用
-+ 后续会转给小姚部分做差异化开发
-**** Linux桌面版
-***** 主要适配IC
-+ 5211 5209
-***** IC特点
-+ 4核A53， 28nm， >512M DDR
-+ emmc或nand base
-***** 主要SDK诉求
-+ 支持Ubuntu或debian等主流系统
-+ 支持音视频的硬解码
-+ 支持GPU硬件加速
-+ LInux版本需要及时更新
-***** 主要设计决策
-+ 使用S700，S900的android版本同一个bsp来支持多个linux发行版
-+ 使用uboot和dts配置
-+ kernel 版本支持3.10.57
-+ boot中使用arm trust firmware保证及时有频率映射，也能够保证kernel开源
-+ Kernel有关SOC的部分采用标准的子系统框架，比如pin ctrl，dma engine，clk framework，以利于将来的upstream的操作
-***** 不足之处
-+ kernel版本已经偏低
-+ 尚未支持视频硬解码加速
-+ 尚未支持GPU硬加速
-***** 后续计划
-+ 升级内核版本到一个比较主流的版本
-+ 支持视频硬件加速
-**** Android平台
-***** 主要适配IC
- + 5211 5209
-***** IC特点
-+ 4核A53， 28nm， >512M DDR
-+ emmc或nand base
-***** 主要SDK诉求
-+ 支持512M DDR
-+ android新版本支持
-***** 主要设计决策
-+ 和LInux 桌面版使用同一个BSP
-***** 后续计划
-+ 支持更新的Android版本
-*** 人员情况
-**** 人员在平台项目间分配情况
-|--------+------------+-----------------+--------+------------------------|
-| 人员   | 职称       | 平台            |   项目 | 负责模块               |
-|--------+------------+-----------------+--------+------------------------|
-| 刘炜   | 高级工程师 | RTOS            |   3503 | SDK TL                 |
-| 汪辉   | 高级工程师 | RTOS            |   3503 | CASE TL                |
-| 李鹏   | 资深工程师 | RTOS            |   3503 | 蓝牙                   |
-| 李钊军 | 工程师     | RTOS            |   3503 | 网络 wifi              |
-| 蒋斌   | 工程师     | RTOS            |   3503 | 应用开发               |
-| 吕锦昂 | 工程师     | RTOS            | 3503 | USB 文件系统               |
-|--------+------------+-----------------+--------+------------------------|
-| 魏华铭 | 高级工程师 | RTOS            |   5601 | SDK TL                 |
-| 刘世军 | 资深工程师 | RTOS            |   5601 | CASE TL                |
-|--------+------------+-----------------+--------+------------------------|
-| 宋智宁 | 高级工程师 | Android &Linux  |   3605 | CASE TL                |
-| 廖田养 | 资深工程师 | Android &Linux  |   3605 | SDK TL                 |
-| 孙成志 | 资深工程师 | Android &Linux  |   3605 | 音视频框架，播放器           |
-| 荣幸   | 工程师     | Android & Linux |   3605 | 音频，alexa AVS        |
-| 刘燚光 | 工程师     | Android & Linux |   3605 | camera&boot&nand flash |
-| 刘新旭 | 工程师     | Android & LInux |   3605 | WIFI/BT                |
-|--------+------------+-----------------+--------+------------------------|
-| 黄俊敏 | 资深工程师 | Android &Linux  |   S700 | GPU，显示， 双系统     |
-| 黄海宇 | 工程师     | Andriod & Linux |   S700 | 显示，LCD，HDMI          |
-|--------+------------+-----------------+--------+------------------------|
-| 蒲进   | 高级工程师 | All             | 无特定 | 项目管理，3503 ota     |
-| 张东风 | 经理       | All             | 无特定 | 架构决策，内存管理     |
-|--------+------------+-----------------+--------+------------------------|
-**** 目前人员状况的一些考虑
-+ android/Linux平台
-  没有新IC和新的大的标案，人员基本上都需要兼顾原来负责的模块
-  同时也需要学习和掌握更多新的模块
-+ 在RTOS这边需要更多人员的时候，会从Andoid LInux这边继续抽调
-+ 从android/LInux抽调过来的人员在原来维护模块没人接手时，需要继续维护
-+ 根据项目需求，需要动态在不同项目间协调人力，
-  比如5601项目，目前两个人，实际上后续还是需要做比较多的事情的，现在主要是由于优先级不高，同时市场要求的time to market不特别看重，所以才持续维持在两个人力
-+ 资深人员发展问题
-  目前部门人员数目小于20人，同时也有经常需要在不同项目间去调整人力，所以目前不适合把不同工作性质的人员划分到不同的团队中去。
-  而是通过设立SDK TL 或 CASE TL，以及具体的技术小组来让资深人员发挥更多的影响力。
-  资深人员的发展希望继续沿着 资深->高级->主任 工程师的方向发展，我觉得，目前比较可能的人选是 刘炜 和 魏华铭。可以找合适的时机来授予相应的技术职称。
-*** 平台部门和方案部门的合作
-**** 平台要求
-+ 目前以及后续规划的平台，除了需要支持本部门的使用外， 还需要支持 方案开发一部，方案开发二部，合肥 深圳炬才开发部以及有可能的上海的公司
-+ 支持外部客户有效率的进行二次开发
-+ 平台的是否好用取决于内部客户和外部客户的评价，以及可以基于平台长出多少差异化的方案
-**** 其他方案部门合作
-在平台开发过程中，需要紧密的和其他部门进行合作开发， 主要有如下几点考量：
-+ 平台重构，本身不是一个新的产品方向，而更多是原有技术的积累和重构，此时积累的经验对项目成败很关键
-  比如5118B，如果后续需要基于zephyr来进行一次平台开发，那么CASE TL是建议由5118项目组的核心研发人员来担任的，除非实在是抽不出对应的人手，才由部分出这个人，但同时也需要5118核心人员承担顾问的角色。
-  SDK TL的角色可以由我们部门承担，也可以借用5118原来比较合格的核心研发人员。
-+ 新的平台开发，是新的产品品类，比如3503的wifi
-  这个原则上 SDK TL和CASE TL都可以由我们部门承担，如果能比较确定后续那个团队会继续使用该平台做更多的方案，也可以由对应的方案团队出合适的人员来承担CASE TL
-+ 在项目开发的过程中，我希望抽调过来的承担TL角色的人员，不再负责原有方案的任务，而专心做平台的案子，在开发的过程中，对我负责。
-  之所以这样考虑的原因，主要是由于在决定一些技术问题的，特别是当两个不同的解决不能简单的说那个好，那个不好的情况下，是需要有人能够做一个技术决策的。
-+ 项目开发完成后，抽调的人员继续回原来的部门。
-**** 平台案的质量保证
-关于如何保证平台案的质量，而尽量避免出现临时的修改，导致SDK的架构不好，难于二次开发，目前是如下考虑的：
-+ Android Linux 平台相对比较容易下判断，有原生框架的使用原生框架，存在多个框架的时候，选择主流的框架，修改原生框架需要慎重考虑
-+ RTOS平台，天然应用，驱动，和内核本身没有非常强的分隔，容易出现划分不清晰的问题
-+ BSP开发，应用框架的开发和应用开发由不同的人员承担，尽量避免从上到下都是一个人
-+ 开始开发前，会对主要的架构设计做初步的讨论，有初步结论后才会开展
-+ 代码提交的时候，使用了gerrit来做代码review，review过的代码才可以集成进来，由CASE TL和SDK TL做初步把关。
-+ 项目到一定阶段后，会安排整体的代码review。
-+ RTOS系统的代码，由于代码量不算太大，单个人花一些时间也可以看完，我也会看一遍，架构上的不合理和优化点还是比较容易发现的。
-+ 目前测试方面，主要还是依赖于研发人员自测，以及系统集成测试这两部分测试。
-  对嵌入式系统，还没找到行之有效的单元测试方法。
-  在做视频PMP的时代，有尝试过单元测试的方法，投入巨大，但收效很小。
-  后续，android和Linux项目中的经验表明，代码review相对来说投入和收益是合适的。
-
-**** 回复
-***** 以Zepha为主要决策点主要风险是第三方驱动支持,我不反对这个决策,认为这个决策是有勇气的,但是我们是否需要一个退路? 例如也提供一个FreeROTS的开发平台?
-
-第三方驱动支持这里是不是指的WIFI驱动这部分， WIFI驱动的话， 我这两天又去读了一下broadcom的Wiced WIFI的SDK（现在属于cypress了）
-****** 主要情况如下：
-+ SDK已经更新到5.0， 支持了更多的组件
-+ 支持 FreeRTOS Nuttx ThreadX，抽象了一个wicedrtos的抽象层
-+ 支持蓝牙（蓝牙部分未开源）
-+ WIFI支持部分，除了wifi模组内部的firmware是一个二进制外，sdio驱动， wifi driver，soft ap， wifi p2p，WDS， wpa suplicant等都是开源的， 对RTOS os的依赖，没有直接依赖，主要依赖RTOS抽象层的 mutex， 信号量，延时以及timer等接口， 使用zephyr也比较容易实现， 所以后续可以我们自己来porting wifi的支持到zephyr上。
-  相对于南方硅谷的WIFI，我们可以学到更多东西。
-+ 支持音频解码，
-+ 支持多个网络协议栈 lwip Netx(未开源) Nuttxns
-+ 支持比较丰富的上层协议，mqtt， coap，http2等
-
-但就WIFI而言，我们后续可以安排移植， 只要移植能够通过， 应该就可以排除这个风险。
-
-FreeRTOS平台如果确实有比较强烈的需求，是可以再整理一份的， 主要的点：
-+ 由于zephyr的整个系统中，从上到下都是一个比较严密的整体（驱动，协议栈）， 要插入FreeRTOS的支持，会改动比较大一些， 工作量会大一些， 也同时会破坏原生结构，不建议这种方式
-+ FreeRTOS 可以做为WIFI平台的一个候选整合FreeRTOS， 驱动， 以及LWIP协议栈
-+ 蓝牙平台目前没有看到有好的开源实现， 所以保持zephyr应该不太影响。
-
-****** FreeRTOS与zephyr平台相比的特点：
-+ FreeRTOS只是一个单纯的OS的core， 提供基本的操作系统原语，比如，调度，信号量，锁，线程等
-+ 使用FreeRTOS的话， 我们还需要整合一些其他组件进来
-+ zephyr除了是一个OS的core外， 还提供了IOT需要的协议栈的支持，尤其是蓝牙部分，基本没有找到其他开源的实现
-+ zephyr大部分的协议栈是重新开发的，所以是比较为zephyr优化的， 但可能会有不成熟的情况。就目前的使用看，zephyr的核心稳定性还好，网络部分确实有一些不够完善的地方
-
-***** 根据你的分析,是否未来在可以承担的范围内,我们应该尽可能用ARM的M0和M3而不要再用MIPS的M4K了.
-从可开发性，和生态上看， 我认为是这样的
-
-***** 3605D Linux音频和3703Linux 视频，是否需要维持两个平台? 是否可以是一个平台。
-这个主要还是由两个不同平台的诉求决定的。
-****** 3703LInux平台：
-+ 支持 SWF播放以及支持讯飞的离线TTS，这个在sayhello规格中需要这两个规格的实现都是从android版本的apk中抠出so来使用的, 因此不能脱离andrid的基本NDK的环境
-+ PM需要3703的应用开发的api等用户可见的部分， 需要和3603 uc的保持一致，这个主要是为了客户切换方便，但这个同时也就决定了这个平台不是一个通用的Linux开发平台
-+ 在Linux平台， 就没有一个相对比较好的播放器和UI配合的框架，相对于Android平台不管性能还是兼容性都会差不少， 这个是Linux架构的原因， Android本身是做了很多整合的工作的。
-+ 由于要支持的规格相对于音频复杂太多， 所以需要的nor 和 Ram的空间都比音频平台大比较多，3703是128M的Nand + 128M的DDR
-+ 在3703项目中，在开发中，都一直坚持一个原则， 保持和平板7051使用同一个BSP，差异和适配都是在上层完成的， 所以从维护角度上来说， 不会增加太多的工作量。
-
-****** 3605LInux音频平台：
-+ 以标准的LInux开发为主要诉求， 方便客户整合第三方资源，这个确定了不能使用andrioid的环境
-+ 音频平台的话，需要把nor和ddr的使用裁剪到最小，nor应该在16M~32M就够了，DDR应该是32M~64M， 规格简单的话应该16M Nor + 32M DDR就够了。这个和视频就没不会完全兼容。
-+ 3605D 为了标准化和长期维护的考虑，会采用S700/s900同一个BSP底层
-+ 3605音频平台，会考虑扩展支持视频和LCD， 这个是分阶段做的事情，加上视频后可以认为变成了视频平台了，加的方式会是可裁剪和可配置的。
-
-所以长远看， 3605D会支持视频和屏， 但不会支持uc的那一套框架， 那一套只保
-留在3703上。
-
-***** 管理上，我立即为啥还是以项目驱动的动因，但我希望决策由几个人做出，所以我建议还是成立一个三到五人的SDK架构部门，任命你为总架构师，其他人为架构师，关键点由这个组产生，项目团队执行。你看看是否合理。
-
-成立一个架构部门我觉得是好的，这样可以集中公司的优势资源，为各个项目服务，做出的决定相互的一致性也会好。
-
-我现在想不清楚的还是架构的决策如何能够被项目开发中真正执行下去，如果项目主要在我这边的这个团队，问题不大，因为我是他们的直接主管。如果项目不在我这边的话，做出的架构决策，我觉得执行起来不会那么顺利，有的时候自己的决定在执行的时候都会反复问自己， 执行其他部门或项目团队外的人的决定相信会更加困难一些。
-
-这部分还是要两位老大多给指导才行
-
-团队的话，主要应该还是RTOS的架构，我们这边考虑如下人员：
-刘炜 优势在 zephyr+mips+wifi
-魏华铭 优势在 arm+ mbeded + BLE
-在加上其他方案部分的一些资深人员就好了，不需要多。
+** 0802 研发会议
+1 20170802研发三部SRD例会报告
+1.1 标案项目相关
+1.1.1 3703
+•	支持android APK
+实现基本完成，本周送测， 8月22号学习版，9月6号发布
+1.1.2 LS360F
+•	已经立项，
+立项会议上达成协议，测试轮次不严格按照5轮来计划， 而是按照合理的方式计划，以控制和计划的偏差为目标，而不是测试轮次。
+•	计划实施平台的测试方法
+1.1.3 3503
+•	去掉usb 读卡器芯片，以节省功耗和成本
+目前3503即使增加了wifi模组的功耗优化，仍然不如3603，主要原因是读卡器功耗，现在尝试让卡和wifi复用卡控制器来解决功耗问题。
+目前基本的功能通了，但wifi有遇到问题，正在澄清中，
+•	psram 和 spi nand
+功能已经调通， nand的逻辑层功能还需要继续完成
+•	双系统支持蓝牙
+由于单系统蓝牙的时间点太晚，为了满足PM的推广需求，仍需要上一个双系统的版本
+争取能够在4M nor上完成， 目前的固件情况：代码 750k， 提示音470K， wifi固件 180k，解码库和中文码表 220k， 预计蓝牙固件700k， ota的时候，提示音和蓝牙固件只放一份，有机会做到4M nor
+需要paul部门把蓝牙推歌的功能porting到3503板子上。
+•	单系统的蓝牙在开发分支上，a2dp avrcp基本功能已有， 后续合并到主分支上，使用的是ivt协议栈
+1.1.4 蓝牙 mcu
+•	蓝牙协议栈调研
+看了broadcom的IOT BT的SDK情况，后续整理报告，
+broadcom的iot的蓝牙支持双模，同时可以作为模组通过uart，spi，usb等多种方式和主控结合，
+传统蓝牙支持除了推歌，打电话，还支持联系人，文件传输等。
+BLE部分支持mesh，支持苹果的相关协议
+应用开发简单，一般的profile是开源的， 核心的协议栈是rom，开发的示例都是demo性质，主要靠打印等来表示流程，有较完整的蓝牙流程，但没有实际产品功能。
+继续调研其他协议栈
+1.1.5 5601
+•	testchip验证
+休眠唤醒问题已经解决
+•	语音遥控器
+使用5118做前端来搭建语音遥控器方案
+•	arm cordio stack
+EEPROM的版本只能使用cordio的sdk
+nor flash的版本，目前有cordio的sdk， 后续计划支持zephyr的sdk
+•	zephyr ble协议栈
+主分支上最近刚刚提交了BLE mesh的支持， 后续nor方案考虑使用zephyr os和协议栈。
 ** 20170706 周总关于产品规划和研发过程中的几大问题
 各位管理团队成员：
 在炬芯今年上半年的工作中发生了一些重大事情，也挖出来一些事情，觉得在我们管理团队的思维中有一些根深蒂固的问题和行为方式，如果不解决，炬芯不是可以用“危险”两个简单的字来解释的。
@@ -13156,6 +12960,338 @@ CLOSED: [2017-06-02 Fri 13:47]
 ***** 双屏异显性能确认
 [[mu4e:msgid:DC4E6E803E914F4B8AFE57F1456019F103465B94@srv-mail-02.actions.com.cn][答复: S700 双屏异显DEMO及性能确认]]
 ***** 开机logo花屏问题
+
+** 20170601：平台方向后续规划
+*** IC情况
+平台的规划主要考虑如下ic平台
++ AP类IC  5202  5211 5209
++ 5116C  5118B  3503 带cache架构的蓝牙IC
++ 5601 BLE IC
++ 耳朵IC  cortex M3 + DSP
++ camera + WIFI小系统
++ cortex A5 + DSP的眼睛IC
+*** 平台状况
+**** RTOS MIPS平台
+***** 主要适配IC
++ 3503，后续考虑 5118B，  5116C， 以及将来camera + wifi IC
+***** IC特点
++ nor base
++ cache 架构，可以XIP来执行代码
++ soc内部有限SRAM
+***** 主要SDK诉求
++ 方便应用开发和debug
++ Nor 和RAM空间占用要小
++ 功能方便裁剪以节省NOR和内存
+***** 主要设计决策
++ kernel使用Zephyr OS，zephyr OS具有以下特点：
+  + 有的代码编译成一个二进制
+     系统中不存在重复代码，可以节省nor的空间
+     没有动态加载的二进制，可以更好防网络攻击
+  + 提供了完整的IOT相关协议栈
+    蓝牙BLE支持
+    WIFI以及网络协议栈支持
+    支持zigbee和路由
+    支持TLS等安全加密库
+  + 提供和很精细的功能可配置
+    可以去除不需要的功能，来减少ram和nor代码占用
+  + 提供驱动模型
+    可以比较好的隔离应用和驱动
+  + 有较好的社区支持，社区开发比较活跃
++ 全新设计的应用框架
+  + 设计了服务模型，对常见的系统功能（播放，录音，mqtt服务）做成独立的服务，服务独立于应用，可以被多种不同的应用使用
+  + 产品整个功能按照场景进行进行合理划分多个应用，故事机划分成多个功能独立的子模块，由应用管理器来管理，主要应用模块有：播放音乐，后台下载 网络配对  百科问答  微信留言 播放tts  PCBA
+  + 应用，服务，系统之间使用消息传递的通信方式来实现松耦合
+  + 使用steam来封装网络流，文件等数据源，简化应用开发。
++ 系统级的设计优化
+  + 设计zero copy技术在驱动，网络协议栈，解码，播放共享同一份数据，极大的减少了内存开销。
+  + 设计了避免内存碎片的内存管理方法，从机制上解决碎片问题
+  + 设计overlay机制来让不同的解码格式共享同一块内存
+  + 应用都是互斥运行的，不同的应用实现复用内存。
+  + 精心处理网络策略来在保证网络稳定性的情况下，减少内存占用
+    1. tcp 延迟回复ACK来避免重发
+    2. 发送数据包使用small buffer避免占用更大buffer
++ 性能和调试的便利性
+  + 支持最新的GCC工具链
+  + 支持标准JTAG工具
+    可以使用业界通用的JTAG调试工具，以及常见的JTAG调试软件，比如gdb， eclipse
+  + 提供功能丰富的串口命令行工具
+    可以通过串口来做系统系能优化，现场debug等，可以查看系统
+    + 设置系统的运行参数
+    + 查看cpu负载
+    + 统计cache miss情况
+    + 查看各个任务的线程栈
+    + 查看内存分配情况，任务栈的使用情况
+    + 网络相关的各个内存buffer情况。
+    + 其他常用的功能
+  + 增加了运行期监控
+    + 检查堆栈溢出
+    + 检查应用的内存泄露
+    + 检查系统的最大关中断时间
+    + 系统panci时，提供调用栈的完整backtrace，并提供符号支持
+***** 不足之处
++ 由于是mips架构， 目前只能支持GCC编译工具链。
+  不太容易支持Keil，IAR等集成开发，调试的IDE环境
++ JTAG目前只支持5PIN的，不支持2PIN的SWD
++ MIPS相对ARM对栈的消耗更多一些，内存需求好高一些
++ 社区和生态，相对于arm会差比较大，比如不能支持arm mbed OS以及CMSIS DAP等现在更主流的调试方式。
+***** 后续计划
++ 持续跟踪zephyr的版本跟新和动态
++ 目前平台已经整合了wifi， BLE 后续需要整合传统l蓝牙功能
++ 目前应用框架和协议栈都还有一些优化工作需要继续完成
+**** RTOS ARM 平台
+***** 主要适配IC
++ 5601 耳朵ic， 这里暂时只考虑5601
+***** IC特点
++ ROM中固化了协议栈，应用框架以及典型的beacon，数传应用
++ 外挂EEPROM作为规模较小的个性化开发
++ 外挂Nor来支持更复杂的协议栈和应用场景
++ 目前TestChip使用了bank架构，后续正式版建议改成cache架构。
++ Bank架构和cache架构在可开发性上有如下缺点
+  + RODATA 不能够放在nor上，需要占用ram空间
+  + 程序中一些small literals不能放在nor上，需要占用ram空间
+  + 在使用调试器的时候，会看到bank切换这个动作，不能做到完全透明。
+***** 主要SDK诉求
++ 方便应用开发和debug
++ EEPROM方案程序需要尽可能的小
++ Nor方案需要尽可能方便开发
+***** 主要设计决策
+****** EEPROM方案
++ 尽可能的固化更多代码，固化代码包括：各种驱动，蓝牙协议栈，应用框架。
++ ROM中固化了了cordio的代码，以降低风险
++ EEPROM开发只需要编写应用本身逻辑代码，其他部分通过调用ROM中的函数实现。
+****** 外挂NOR 方案
++ 在优先考虑开放式开发的时候， 可以不使用ROM中固化的代码
++ 程序代码较大的时候使用bank机制
++ 可以支持更多的OS平台，比如zephyr，mbed OS
+****** 开发便利性
++ 支持gcc编译，和标准的jtag调试
++ 支持KEIL等业界常见的IDE环境，可以支持标准的烧写flash，单步调试等操作
++ 支持arm的CMSIS DAP调试规范，可以通过一个usb接口同时支持串口，U盘，以及jtag
++ 使用统一编译的方式，
+  整个程序，包括ROM中的patch代码，蓝牙controller的patch代码都在一个工程内可以编译出来，实现所见即所得的开发模式
++ 提供了EEPROM和nor上应用开发的样板工程，简化客户应用程序开发
++ 提供类似业界的主流开发板，以及相应的调试接口
++ 可以使用keil工具增加我们开发的插件，即可完善支持KEIL IDE
+***** 不足之处
++ 由于bank架构，所以在程序代码较大的时候， 需要使用bank的时候， 在调试器中能够看到bank切换的过程，从而和真正的EFLASH的调试方式有一些不同
+***** 后续计划
++ 完善sdk文档
++ 完善开发板支持
++ nor方案支持zephyr OS
++ nor方案支持mbed OS
+**** Linux 音频平台
+***** 主要适配IC
++ ATS3605 (GL5202E)
+***** IC特点
++ 4核A5， 55nm， 256M DDR
++ SLC NAND 或 Nor base
+***** 主要SDK诉求
++ 可以给算法类公司提供一个比较好的开发平台，比较容易的验证算法
++ 可以提供给方案公司，可以开发基于音频播放，录音，以及支持网络的类似WIFI音箱的产品
++ 可以对接比较常见的智能云平台，比如amazon的AVS服务
+***** 主要设计决策
++ 需要支持标准的linux工具链，以利于算法公司整合第三方开源库
++ 整合一个标准的比较适合音频的Linux发行版，openWRT
++ 支持alsa lib等linux比较常用的音频相关库
++ 支持一个常用的Linux的音频播放框架
++ 开发一个示例的音频播放程序
++ 对接上amazon的avs云，以及其他元
++ 支持WIFI BT等无线功能
++ BSP尽量规范化，考虑和S700 S900整合到同一个BSP中以方便维护
+***** 后续计划
+标案立项，分两步走：
+1. 基于现有BSP（3703 BSP），整合openWRT，以及支持alsa lib，可以提供给算法公司使用
+2. BSP整合到S700，同时完善需要的其他功能，然后发布
+**** Linux 视频平台
+***** 主要适配IC
++ ATS3703 (GL5202E)
+***** IC特点
++ 4核A5， 55nm， 256M DDR
++ SLC NAND 或 Nor base
+***** 主要SDK诉求
++ 由于客户熟悉uc平台的开发方式，所以需要api和应用框架都兼容uc
++ 需要支持SWF格式播放
++ 支持视频聊天和图像识别
+***** 主要设计决策
++ 保持和7051同一个BSP
+  不采用LS360X原来的音视频框架和显示框架，原来框架对bsp改动太多，增加了很多非标准的ioctl
++ 裁剪Android 只剩下NDK中必要的部分，没有java部分。 这样可以复用android平台已经稳定和兼容性没有问题的底层。
++ 使用andriod NDK的开发方式，适配uc平台原有的应用框架
++ UI图层叠加仍然只能使用GPU
++ 移植Android平台的浏览器的FLASH插件，在NDK环境跑起来支持SWF播放
+***** 不足之处
++ 需要熟悉android NDK的开发或者熟悉我们uc平台的开发方式
++ 由于使用了android的工具链，不太容易整合标准的Linux的第三方应用程序
+  整合第三方应用库的时候， 需要做一些调整才行。虽然大部分的调整并不大，但也是一个障碍
+***** 后续计划
++ 会基于这个平台做一些差异化，比如音频+camera类的应用
++ 后续会转给小姚部分做差异化开发
+**** Linux桌面版
+***** 主要适配IC
++ 5211 5209
+***** IC特点
++ 4核A53， 28nm， >512M DDR
++ emmc或nand base
+***** 主要SDK诉求
++ 支持Ubuntu或debian等主流系统
++ 支持音视频的硬解码
++ 支持GPU硬件加速
++ LInux版本需要及时更新
+***** 主要设计决策
++ 使用S700，S900的android版本同一个bsp来支持多个linux发行版
++ 使用uboot和dts配置
++ kernel 版本支持3.10.57
++ boot中使用arm trust firmware保证及时有频率映射，也能够保证kernel开源
++ Kernel有关SOC的部分采用标准的子系统框架，比如pin ctrl，dma engine，clk framework，以利于将来的upstream的操作
+***** 不足之处
++ kernel版本已经偏低
++ 尚未支持视频硬解码加速
++ 尚未支持GPU硬加速
+***** 后续计划
++ 升级内核版本到一个比较主流的版本
++ 支持视频硬件加速
+**** Android平台
+***** 主要适配IC
+ + 5211 5209
+***** IC特点
++ 4核A53， 28nm， >512M DDR
++ emmc或nand base
+***** 主要SDK诉求
++ 支持512M DDR
++ android新版本支持
+***** 主要设计决策
++ 和LInux 桌面版使用同一个BSP
+***** 后续计划
++ 支持更新的Android版本
+*** 人员情况
+**** 人员在平台项目间分配情况
+|--------+------------+-----------------+--------+------------------------|
+| 人员   | 职称       | 平台            |   项目 | 负责模块               |
+|--------+------------+-----------------+--------+------------------------|
+| 刘炜   | 高级工程师 | RTOS            |   3503 | SDK TL                 |
+| 汪辉   | 高级工程师 | RTOS            |   3503 | CASE TL                |
+| 李鹏   | 资深工程师 | RTOS            |   3503 | 蓝牙                   |
+| 李钊军 | 工程师     | RTOS            |   3503 | 网络 wifi              |
+| 蒋斌   | 工程师     | RTOS            |   3503 | 应用开发               |
+| 吕锦昂 | 工程师     | RTOS            | 3503 | USB 文件系统               |
+|--------+------------+-----------------+--------+------------------------|
+| 魏华铭 | 高级工程师 | RTOS            |   5601 | SDK TL                 |
+| 刘世军 | 资深工程师 | RTOS            |   5601 | CASE TL                |
+|--------+------------+-----------------+--------+------------------------|
+| 宋智宁 | 高级工程师 | Android &Linux  |   3605 | CASE TL                |
+| 廖田养 | 资深工程师 | Android &Linux  |   3605 | SDK TL                 |
+| 孙成志 | 资深工程师 | Android &Linux  |   3605 | 音视频框架，播放器           |
+| 荣幸   | 工程师     | Android & Linux |   3605 | 音频，alexa AVS        |
+| 刘燚光 | 工程师     | Android & Linux |   3605 | camera&boot&nand flash |
+| 刘新旭 | 工程师     | Android & LInux |   3605 | WIFI/BT                |
+|--------+------------+-----------------+--------+------------------------|
+| 黄俊敏 | 资深工程师 | Android &Linux  |   S700 | GPU，显示， 双系统     |
+| 黄海宇 | 工程师     | Andriod & Linux |   S700 | 显示，LCD，HDMI          |
+|--------+------------+-----------------+--------+------------------------|
+| 蒲进   | 高级工程师 | All             | 无特定 | 项目管理，3503 ota     |
+| 张东风 | 经理       | All             | 无特定 | 架构决策，内存管理     |
+|--------+------------+-----------------+--------+------------------------|
+**** 目前人员状况的一些考虑
++ android/Linux平台
+  没有新IC和新的大的标案，人员基本上都需要兼顾原来负责的模块
+  同时也需要学习和掌握更多新的模块
++ 在RTOS这边需要更多人员的时候，会从Andoid LInux这边继续抽调
++ 从android/LInux抽调过来的人员在原来维护模块没人接手时，需要继续维护
++ 根据项目需求，需要动态在不同项目间协调人力，
+  比如5601项目，目前两个人，实际上后续还是需要做比较多的事情的，现在主要是由于优先级不高，同时市场要求的time to market不特别看重，所以才持续维持在两个人力
++ 资深人员发展问题
+  目前部门人员数目小于20人，同时也有经常需要在不同项目间去调整人力，所以目前不适合把不同工作性质的人员划分到不同的团队中去。
+  而是通过设立SDK TL 或 CASE TL，以及具体的技术小组来让资深人员发挥更多的影响力。
+  资深人员的发展希望继续沿着 资深->高级->主任 工程师的方向发展，我觉得，目前比较可能的人选是 刘炜 和 魏华铭。可以找合适的时机来授予相应的技术职称。
+*** 平台部门和方案部门的合作
+**** 平台要求
++ 目前以及后续规划的平台，除了需要支持本部门的使用外， 还需要支持 方案开发一部，方案开发二部，合肥 深圳炬才开发部以及有可能的上海的公司
++ 支持外部客户有效率的进行二次开发
++ 平台的是否好用取决于内部客户和外部客户的评价，以及可以基于平台长出多少差异化的方案
+**** 其他方案部门合作
+在平台开发过程中，需要紧密的和其他部门进行合作开发， 主要有如下几点考量：
++ 平台重构，本身不是一个新的产品方向，而更多是原有技术的积累和重构，此时积累的经验对项目成败很关键
+  比如5118B，如果后续需要基于zephyr来进行一次平台开发，那么CASE TL是建议由5118项目组的核心研发人员来担任的，除非实在是抽不出对应的人手，才由部分出这个人，但同时也需要5118核心人员承担顾问的角色。
+  SDK TL的角色可以由我们部门承担，也可以借用5118原来比较合格的核心研发人员。
++ 新的平台开发，是新的产品品类，比如3503的wifi
+  这个原则上 SDK TL和CASE TL都可以由我们部门承担，如果能比较确定后续那个团队会继续使用该平台做更多的方案，也可以由对应的方案团队出合适的人员来承担CASE TL
++ 在项目开发的过程中，我希望抽调过来的承担TL角色的人员，不再负责原有方案的任务，而专心做平台的案子，在开发的过程中，对我负责。
+  之所以这样考虑的原因，主要是由于在决定一些技术问题的，特别是当两个不同的解决不能简单的说那个好，那个不好的情况下，是需要有人能够做一个技术决策的。
++ 项目开发完成后，抽调的人员继续回原来的部门。
+**** 平台案的质量保证
+关于如何保证平台案的质量，而尽量避免出现临时的修改，导致SDK的架构不好，难于二次开发，目前是如下考虑的：
++ Android Linux 平台相对比较容易下判断，有原生框架的使用原生框架，存在多个框架的时候，选择主流的框架，修改原生框架需要慎重考虑
++ RTOS平台，天然应用，驱动，和内核本身没有非常强的分隔，容易出现划分不清晰的问题
++ BSP开发，应用框架的开发和应用开发由不同的人员承担，尽量避免从上到下都是一个人
++ 开始开发前，会对主要的架构设计做初步的讨论，有初步结论后才会开展
++ 代码提交的时候，使用了gerrit来做代码review，review过的代码才可以集成进来，由CASE TL和SDK TL做初步把关。
++ 项目到一定阶段后，会安排整体的代码review。
++ RTOS系统的代码，由于代码量不算太大，单个人花一些时间也可以看完，我也会看一遍，架构上的不合理和优化点还是比较容易发现的。
++ 目前测试方面，主要还是依赖于研发人员自测，以及系统集成测试这两部分测试。
+  对嵌入式系统，还没找到行之有效的单元测试方法。
+  在做视频PMP的时代，有尝试过单元测试的方法，投入巨大，但收效很小。
+  后续，android和Linux项目中的经验表明，代码review相对来说投入和收益是合适的。
+
+**** 回复
+***** 以Zepha为主要决策点主要风险是第三方驱动支持,我不反对这个决策,认为这个决策是有勇气的,但是我们是否需要一个退路? 例如也提供一个FreeROTS的开发平台?
+
+第三方驱动支持这里是不是指的WIFI驱动这部分， WIFI驱动的话， 我这两天又去读了一下broadcom的Wiced WIFI的SDK（现在属于cypress了）
+****** 主要情况如下：
++ SDK已经更新到5.0， 支持了更多的组件
++ 支持 FreeRTOS Nuttx ThreadX，抽象了一个wicedrtos的抽象层
++ 支持蓝牙（蓝牙部分未开源）
++ WIFI支持部分，除了wifi模组内部的firmware是一个二进制外，sdio驱动， wifi driver，soft ap， wifi p2p，WDS， wpa suplicant等都是开源的， 对RTOS os的依赖，没有直接依赖，主要依赖RTOS抽象层的 mutex， 信号量，延时以及timer等接口， 使用zephyr也比较容易实现， 所以后续可以我们自己来porting wifi的支持到zephyr上。
+  相对于南方硅谷的WIFI，我们可以学到更多东西。
++ 支持音频解码，
++ 支持多个网络协议栈 lwip Netx(未开源) Nuttxns
++ 支持比较丰富的上层协议，mqtt， coap，http2等
+
+但就WIFI而言，我们后续可以安排移植， 只要移植能够通过， 应该就可以排除这个风险。
+
+FreeRTOS平台如果确实有比较强烈的需求，是可以再整理一份的， 主要的点：
++ 由于zephyr的整个系统中，从上到下都是一个比较严密的整体（驱动，协议栈）， 要插入FreeRTOS的支持，会改动比较大一些， 工作量会大一些， 也同时会破坏原生结构，不建议这种方式
++ FreeRTOS 可以做为WIFI平台的一个候选整合FreeRTOS， 驱动， 以及LWIP协议栈
++ 蓝牙平台目前没有看到有好的开源实现， 所以保持zephyr应该不太影响。
+
+****** FreeRTOS与zephyr平台相比的特点：
++ FreeRTOS只是一个单纯的OS的core， 提供基本的操作系统原语，比如，调度，信号量，锁，线程等
++ 使用FreeRTOS的话， 我们还需要整合一些其他组件进来
++ zephyr除了是一个OS的core外， 还提供了IOT需要的协议栈的支持，尤其是蓝牙部分，基本没有找到其他开源的实现
++ zephyr大部分的协议栈是重新开发的，所以是比较为zephyr优化的， 但可能会有不成熟的情况。就目前的使用看，zephyr的核心稳定性还好，网络部分确实有一些不够完善的地方
+
+***** 根据你的分析,是否未来在可以承担的范围内,我们应该尽可能用ARM的M0和M3而不要再用MIPS的M4K了.
+从可开发性，和生态上看， 我认为是这样的
+
+***** 3605D Linux音频和3703Linux 视频，是否需要维持两个平台? 是否可以是一个平台。
+这个主要还是由两个不同平台的诉求决定的。
+****** 3703LInux平台：
++ 支持 SWF播放以及支持讯飞的离线TTS，这个在sayhello规格中需要这两个规格的实现都是从android版本的apk中抠出so来使用的, 因此不能脱离andrid的基本NDK的环境
++ PM需要3703的应用开发的api等用户可见的部分， 需要和3603 uc的保持一致，这个主要是为了客户切换方便，但这个同时也就决定了这个平台不是一个通用的Linux开发平台
++ 在Linux平台， 就没有一个相对比较好的播放器和UI配合的框架，相对于Android平台不管性能还是兼容性都会差不少， 这个是Linux架构的原因， Android本身是做了很多整合的工作的。
++ 由于要支持的规格相对于音频复杂太多， 所以需要的nor 和 Ram的空间都比音频平台大比较多，3703是128M的Nand + 128M的DDR
++ 在3703项目中，在开发中，都一直坚持一个原则， 保持和平板7051使用同一个BSP，差异和适配都是在上层完成的， 所以从维护角度上来说， 不会增加太多的工作量。
+
+****** 3605LInux音频平台：
++ 以标准的LInux开发为主要诉求， 方便客户整合第三方资源，这个确定了不能使用andrioid的环境
++ 音频平台的话，需要把nor和ddr的使用裁剪到最小，nor应该在16M~32M就够了，DDR应该是32M~64M， 规格简单的话应该16M Nor + 32M DDR就够了。这个和视频就没不会完全兼容。
++ 3605D 为了标准化和长期维护的考虑，会采用S700/s900同一个BSP底层
++ 3605音频平台，会考虑扩展支持视频和LCD， 这个是分阶段做的事情，加上视频后可以认为变成了视频平台了，加的方式会是可裁剪和可配置的。
+
+所以长远看， 3605D会支持视频和屏， 但不会支持uc的那一套框架， 那一套只保
+留在3703上。
+
+***** 管理上，我立即为啥还是以项目驱动的动因，但我希望决策由几个人做出，所以我建议还是成立一个三到五人的SDK架构部门，任命你为总架构师，其他人为架构师，关键点由这个组产生，项目团队执行。你看看是否合理。
+
+成立一个架构部门我觉得是好的，这样可以集中公司的优势资源，为各个项目服务，做出的决定相互的一致性也会好。
+
+我现在想不清楚的还是架构的决策如何能够被项目开发中真正执行下去，如果项目主要在我这边的这个团队，问题不大，因为我是他们的直接主管。如果项目不在我这边的话，做出的架构决策，我觉得执行起来不会那么顺利，有的时候自己的决定在执行的时候都会反复问自己， 执行其他部门或项目团队外的人的决定相信会更加困难一些。
+
+这部分还是要两位老大多给指导才行
+
+团队的话，主要应该还是RTOS的架构，我们这边考虑如下人员：
+刘炜 优势在 zephyr+mips+wifi
+魏华铭 优势在 arm+ mbeded + BLE
+在加上其他方案部分的一些资深人员就好了，不需要多。
 ** 2017.5.17 方案团队分工规划
 *** 工作分工
 **** paul
@@ -13358,7 +13494,7 @@ alsa lib调试
 8. 5601 支持zephyr， 后续安排
 9. BLE mesh规范已经发布，目前还未有开源实现，预计过一段时间在zephyr上会有，是否需要投入精力去搞。
 10. 双系统支持快速倒车， 未开始
-** 20070301
+** 20070301SRD会议
 *** Android项目
 + S700带起了方糖CB6版型， 发给瑞泰做车机方案第一阶段
 + 使用GS900增加96 board版型（TAG 0227）， 使用该分支和版型做后续S900推广。
@@ -13642,7 +13778,310 @@ https://en.wikipedia.org/wiki/IEEE_802.11
 ** commn lisp
 *** slime
 https://www.common-lisp.net/project/slime/doc/html/index.html#SEC_Contents
+*** perl正则表达式
+**** 正则表达式中的常用模式
+/pattern/  结果
+. 匹配除换行符以外的所有字符
+x? 匹配 0 次或一次 x 字符串
+x* 匹配 0 次或多次 x 字符串，但匹配可能的最少次数
+x+ 匹配 1 次或多次 x 字符串，但匹配可能的最少次数
+.* 匹配 0 次或一次的任何字符
+.+ 匹配 1 次或多次的任何字符
+{m} 匹配刚好是 m 个 的指定字符串
+{m,n} 匹配在 m个 以上 n个 以下 的指定字符串
+{m,} 匹配 m个 以上 的指定字符串
+[] 匹配符合 [] 内的字符
+[^] 匹配不符合 [] 内的字符
+[0-9] 匹配所有数字字符
+[a-z] 匹配所有小写字母字符
+[^0-9] 匹配所有非数字字符
+[^a-z] 匹配所有非小写字母字符
+^ 匹配字符开头的字符
+$ 匹配字符结尾的字符
+\d 匹配一个数字的字符，和 [0-9] 语法一样
+\d+ 匹配多个数字字符串，和 [0-9]+ 语法一样
+\D 非数字，其他同 \d
+\D+ 非数字，其他同 \d+
+\w 英文字母或数字的字符串，和 [a-zA-Z0-9] 语法一样
+\w+ 和 [a-zA-Z0-9]+ 语法一样
+\W 非英文字母或数字的字符串，和 [^a-zA-Z0-9] 语法一样
+\W+ 和 [^a-zA-Z0-9]+ 语法一样
+\s 空格，和 [\n\t\r\f] 语法一样
+\s+ 和 [\n\t\r\f]+ 一样
+\S 非空格，和 [^\n\t\r\f] 语法一样
+\S+ 和 [^\n\t\r\f]+ 语法一样
+\b 匹配以英文字母,数字为边界的字符串
+\B 匹配不以英文字母,数值为边界的字符串
+a|b|c 匹配符合a字符 或是b字符 或是c字符 的字符串
+abc 匹配含有 abc 的字符串
 
+(pattern) () 这个符号会记住所找寻到的字符串，是一个很实用的语法。第一个 () 内所找到的字符串变成 $1 这个变量或是 \1 变量，第二个 () 内所找到的字符串变成 $2 这个变量或是 \2 变量，以此类推下去。
+/pattern/i i 这个参数表示忽略英文大小写，也就是在匹配字符串的时候，不考虑英文的大小写问题。
+
+\ 如果要在 pattern 模式中找寻一个特殊字符，如 "*"，则要在这个字符前加上 \ 符号，这样才会让特殊字符失效
+**** 范例 说明
+/perl/ 找到含有 perl 的字符串
+/^perl/ 找到开头是 perl 的字符串
+/perl$/ 找到结尾是 perl 的字符串
+/c|g|i/ 找到含有 c 或 g 或 i 的字符串
+/cg{2,4}i/ 找到 c 后面跟着 2个到 4个 g ，再跟着 i 的字符串
+/cg{2,}i/ 找到 c 后面跟着 2个以上 g ，再跟着 i 的字符串
+/cg{2}i/ 找到 c 后面跟着 2个 g，再跟着 i 的字符串
+/cg*i/ 找到 c 后面跟着 0个或多个 g ，再跟着 i 的字符串，如同/cg{0,1}i/
+/cg+i/ 找到 c 后面跟着一个以上 g，再跟着 i 的字符串，如同/cg{1,}i/
+/cg?i/ 找到 c 后面跟着 0个或是 1个 g ，再跟着 i 的字符串，如同/cg{0,1}i/
+/c.i/ 找到 c 后面跟着一个任意字符，再跟着 i 的字符串
+/c..i/ 找到 c 后面跟着二个任意字符，再跟着 i 的字符串
+/[cgi]/ 找到符合有这三个字符任意一个的字符串
+/[^cgi]/ 找到没有这三个字符中任意一个的字符串
+/\d/ 找寻符合数字的字符，可以使用/\d+/来表示一个或是多个数字组成的字符串
+/\D/ 找寻符合不是数字的字符，可以使用/\D+/来表示一个或是更多个非数字组成的字符串
+/\*/ 找寻符合 * 这个字符，因为 * 在常规表达式中有它的特殊意思，所以要在这个特殊符号前加上 \ 符号，这样才会让这个特殊字符失效
+/abc/i 找寻符合 abc 的字符串而且不考虑这些字符串的大小写
+
+*** quicklisp
+***** yason
+(defvar *json-string* "[{\"foo\":1,\"bar\":[7,8,9]},2,3,4,[5,6,7],true,null]")
+(let* ((result (yason:parse *json-string*)))
+  (print result)
+  (alexandria:hash-table-plist (first result)))
+
+(yason:encode
+ (list (alexandria:plist-hash-table
+        '("foo" 1 "bar" (7 8 9))
+        :test #'equal)
+       2 3 4
+       '(5 6 7)
+       t nil)
+ *standard-output*)
+
+(yason:with-output (*standard-output*)
+  (yason:with-object ()
+    (yason:encode-object-element "hello" "hu hu")
+    (yason:with-object-element ("harr")
+      (yason:with-array ()
+        (dotimes (i 3)
+          (yason:encode-array-element i))))))
+(yason:with-output (*standard-output*)
+  (yason:with-array ()
+    (dotimes (i 3)
+      (yason:encode-array-element i))))
+
+(yason:encode
+ (alexandria:plist-hash-table
+  '("format"  "pcm" "rate" "8000" "channel" "1"
+    "cuid" "serial987654321"
+    "speech" "len")
+  :test #'equal)
+ *standard-output*)
+***** cl-async
+  http://orthecreedence.github.io/cl-async/documentation
+  (load "/Users/zhangdongfeng/quicklisp/dists/quicklisp/software/slime-v2.18/contrib/swank-listener-hooks.lisp")
+  (as:start-event-loop
+          (lambda ()
+            (format t "Exiting event loop.~%")))
+(as:start-event-loop
+          (lambda ()
+            (as:delay
+             (lambda ()
+               (format t "Timer fired. Exiting.~%"))
+             :time 3)))
+
+(defun my-echo-server ()
+  (format t "Starting server.~%")
+  (as:tcp-server nil 9003  ; nil is "0.0.0.0"
+                 (lambda (socket data)
+                   ;; echo the data back into the socket
+                   (as:write-socket-data socket data))
+                 (lambda (err) (format t "listener event: ~a~%" err)))
+  ;; catch sigint
+  (as:signal-handler 2 (lambda (sig)
+                         (declare (ignore sig))
+                         (as:exit-event-loop))))
+
+(as:start-event-loop #'my-echo-server)
+
+(ql:quickload :cl-async)
+
+(defun do-lookups ()
+  (dolist (lookup `(("google.com")
+                    ("musio.com" . ,as:+af-inet+)
+                    ("www.google.com" . ,as:+af-inet6+)))
+    (let ((host (car lookup))
+          (family (if (cdr lookup) (cdr lookup) as:+af-unspec+)))
+      (as:dns-lookup host
+                     (lambda (addr fam)
+                       (declare (ignore fam))
+                       (format t "~a resolved to ~s (~s)~%" host addr family))
+                     :event-cb (lambda (ev)
+                                 (format t "ev: ~a(~a): ~a~%" host family ev))
+                     :family family))))
+
+(as:start-event-loop #'do-lookups)
+
+
+
+(defun get-http-response (host &optional (port 80))
+  (as:tcp-connect host port
+    (lambda (sock data)
+      (unless (as:socket-closed-p sock)
+        (as:close-socket sock))
+      (format t "~a" (babel:octets-to-string data)))
+    (lambda (ev)
+      (format t "ev: ~a~%" ev))
+    :data (format nil "GET / HTTP/1.1~c~cHost: ~a~c~c~c~c"
+                  #\return #\newline
+                  host
+                  #\return #\newline
+                  #\return #\newline)
+    :read-timeout 5))
+
+(as:start-event-loop (lambda () (get-http-response "www.baidu.com")))
+***** sb-textinfo
+
+http://nikodemus.github.io/sb-texinfo/
+https://github.com/sionescu/texinfo-docstrings
+
+(sb-texinfo:generate-includes #p "/Users/zhangdongfeng/quicklisp/dists/quicklisp/software/babel-20150608-git/doc/include/" (list :babel :babel-streams :babel-tests))
+***** roswell
+https://github.com/roswell/roswell\
+
+https://github.com/roswell/roswell/wiki/0.-FAQ
+
+
+ros install elf
+~/.roswell/local-projects
+ln -s ~/quicklisp/local-projects/ ~/.roswell/local-projects
+
+
+ros init
+ros init test
+
+#!/bin/sh
+#|-*- mode:lisp -*-|#
+#|
+exec ros -Q -- $0 "$@"
+|#
+
+(defun fact (n)
+  (if (zerop n)
+      1
+      (* n (fact (1- n)))))
+
+(defun main (n &rest argv)
+  (declare (ignore argv))
+  (format t "~&Factorial ~D = ~D~%" n (fact (parse-integer n))))
+
+./test.ros 3
+ros build test.ros
+***** cl-project
+(cl-project:make-project #p"~/.roswell/local-projects/cl-demo/"
+                                  :depends-on '(:clack :cl-annot))
+https://github.com/fukamachi/cl-project
+http://labs.ariel-networks.com/cl-style-guide.html
+
+***** flexi-streams
+
+https://github.com/edicl
+
+ unicode, utf-8, codepage的含义 以及 相互关系
+http://blog.csdn.net/normallife/article/details/8548306
+
+http://weitz.de/flexi-streams/
+
+utf8汉字编码16进制对照
+http://blog.chinaunix.net/uid-25544300-id-3281847.html
+
+(defun bar (pathspec)
+        "With a flexi stream."
+        (with-open-file (out pathspec
+                             :direction :output
+                             :if-exists :supersede
+                             :element-type 'octet
+                                        ;:external-format '(:latin-1 :eol-style :lf)
+                             )
+          (setq out (make-flexi-stream out :external-format :utf-8))
+          (write-line "ÄÖÜ1" out)
+          (setf (flexi-stream-external-format out) '(:latin-1 :eol-style :lf))
+          (write-line "ÄÖÜ2" out)
+          (write-byte #xeb out)
+          (write-byte #xa3 out)
+          (write-byte #xa4 out)
+          (write-byte #xa5 out)
+                                        ;          (write-sequence #(#xa3 #xa4 #xa5) out)
+          (setf (flexi-stream-external-format out) :ucs-2be)
+          (write-line "ÄÖÜ3" out)))
+
+(defun baz (pathspec)
+        (let (result)
+          (with-open-file (in pathspec :element-type 'octet)
+            (setq in (make-flexi-stream in :external-format :utf-8))
+            (push (read-line in) result)
+            (push (read-byte in) result)
+            (setf (flexi-stream-external-format in) '(:latin-1 :eol-style :lf))
+            (push (read-line in) result)
+            (setf (flexi-stream-external-format in) :greek)
+            (push (read-char in) result)
+            (setf (flexi-stream-external-format in) :latin0)
+            (let ((string (make-string 3 :element-type 'character)))
+              (read-sequence string in)
+              (push string result))
+            (let ((octets (make-array 2 :element-type 'octet)))
+              (read-sequence octets in)
+              (push octets result))
+            (setf (flexi-stream-external-format in) :ucs-2be)
+            (push (read-line in) result))
+          (nreverse result)))
+
+***** CFFI
+https://common-lisp.net/project/cffi/manual/html_node/
+ (defpackage :cffi-user
+    (:use :common-lisp :cffi))
+  (in-package :cffi-user)
+  (define-foreign-library libcurl
+    (:darwin (:or "libcurl.3.dylib" "libcurl.dylib"))
+    (:unix (:or "libcurl.so.3" "libcurl.so"))
+    (t (:default "libcurl")))
+  (use-foreign-library libcurl)
+
+  (defctype curl-code :int)
+  ;;; Initialize libcurl with FLAGS.
+  (defcfun "curl_global_init" curl-code
+    (flags :long))
+(curl-global-init 0)
+(defcfun "curl_easy_init" :pointer)
+
+  (defcfun "curl_easy_cleanup" :void
+    (easy-handle :pointer))
+(defparameter *easy-handle* (curl-easy-init))
+
+(defmacro define-curl-options (name type-offsets &rest enum-args)
+    (flet ((enumerated-value (type offset)
+             (+ (getf type-offsets type) offset)))
+      `(progn
+         (defcenum ,name
+           ,@(loop for (name type number) in enum-args
+                collect (list name (enumerated-value type number))))
+         ',name)))                ;for REPL users' sanity
+
+  (define-curl-options curl-option
+      (long 0 objectpoint 10000 functionpoint 20000 off-t 30000)
+    (:noprogress long 43)
+    (:nosignal long 99)
+    (:errorbuffer objectpoint 10)
+    (:url objectpoint 2))
+
+(foreign-funcall "curl_easy_setopt"
+               :pointer *easy-handle*
+               curl-option :nosignal :long 1 curl-code)
+
+ (defctype easy-handle :pointer)
+
+ (defmacro curl-easy-setopt (easy-handle enumerated-name
+                              value-type new-value)
+    `(foreign-funcall "curl_easy_setopt" easy-handle ,easy-handle
+                      curl-option ,enumerated-name
+                      ,value-type ,new-value curl-code))
 ** share lib 空间优化
 https://stackoverflow.com/questions/31354641/c-reduce-library-size-by-excluding-unnecessary-functions-programmatically
 https://stackoverflow.com/questions/8021470/how-to-optimize-size-of-shared-library
@@ -14135,249 +14574,6 @@ The kernel offers several features that distinguish it from other small OSes:
 ** scheme
 
 https://github.com/cisco/chezscheme
-** quicklisp
-**** yason
-(defvar *json-string* "[{\"foo\":1,\"bar\":[7,8,9]},2,3,4,[5,6,7],true,null]")
-(let* ((result (yason:parse *json-string*)))
-  (print result)
-  (alexandria:hash-table-plist (first result)))
-
-(yason:encode
- (list (alexandria:plist-hash-table
-        '("foo" 1 "bar" (7 8 9))
-        :test #'equal)
-       2 3 4
-       '(5 6 7)
-       t nil)
- *standard-output*)
-
-(yason:with-output (*standard-output*)
-  (yason:with-object ()
-    (yason:encode-object-element "hello" "hu hu")
-    (yason:with-object-element ("harr")
-      (yason:with-array ()
-        (dotimes (i 3)
-          (yason:encode-array-element i))))))
-(yason:with-output (*standard-output*)
-  (yason:with-array ()
-    (dotimes (i 3)
-      (yason:encode-array-element i))))
-
-(yason:encode
- (alexandria:plist-hash-table
-  '("format"  "pcm" "rate" "8000" "channel" "1"
-    "cuid" "serial987654321"
-    "speech" "len")
-  :test #'equal)
- *standard-output*)
-**** cl-async
-  http://orthecreedence.github.io/cl-async/documentation
-  (load "/Users/zhangdongfeng/quicklisp/dists/quicklisp/software/slime-v2.18/contrib/swank-listener-hooks.lisp")
-  (as:start-event-loop
-          (lambda ()
-            (format t "Exiting event loop.~%")))
-(as:start-event-loop
-          (lambda ()
-            (as:delay
-             (lambda ()
-               (format t "Timer fired. Exiting.~%"))
-             :time 3)))
-
-(defun my-echo-server ()
-  (format t "Starting server.~%")
-  (as:tcp-server nil 9003  ; nil is "0.0.0.0"
-                 (lambda (socket data)
-                   ;; echo the data back into the socket
-                   (as:write-socket-data socket data))
-                 (lambda (err) (format t "listener event: ~a~%" err)))
-  ;; catch sigint
-  (as:signal-handler 2 (lambda (sig)
-                         (declare (ignore sig))
-                         (as:exit-event-loop))))
-
-(as:start-event-loop #'my-echo-server)
-
-(ql:quickload :cl-async)
-
-(defun do-lookups ()
-  (dolist (lookup `(("google.com")
-                    ("musio.com" . ,as:+af-inet+)
-                    ("www.google.com" . ,as:+af-inet6+)))
-    (let ((host (car lookup))
-          (family (if (cdr lookup) (cdr lookup) as:+af-unspec+)))
-      (as:dns-lookup host
-                     (lambda (addr fam)
-                       (declare (ignore fam))
-                       (format t "~a resolved to ~s (~s)~%" host addr family))
-                     :event-cb (lambda (ev)
-                                 (format t "ev: ~a(~a): ~a~%" host family ev))
-                     :family family))))
-
-(as:start-event-loop #'do-lookups)
-
-
-
-(defun get-http-response (host &optional (port 80))
-  (as:tcp-connect host port
-    (lambda (sock data)
-      (unless (as:socket-closed-p sock)
-        (as:close-socket sock))
-      (format t "~a" (babel:octets-to-string data)))
-    (lambda (ev)
-      (format t "ev: ~a~%" ev))
-    :data (format nil "GET / HTTP/1.1~c~cHost: ~a~c~c~c~c"
-                  #\return #\newline
-                  host
-                  #\return #\newline
-                  #\return #\newline)
-    :read-timeout 5))
-
-(as:start-event-loop (lambda () (get-http-response "www.baidu.com")))
-**** sb-textinfo
-
-http://nikodemus.github.io/sb-texinfo/
-https://github.com/sionescu/texinfo-docstrings
-
-(sb-texinfo:generate-includes #p "/Users/zhangdongfeng/quicklisp/dists/quicklisp/software/babel-20150608-git/doc/include/" (list :babel :babel-streams :babel-tests))
-**** roswell
-https://github.com/roswell/roswell\
-
-https://github.com/roswell/roswell/wiki/0.-FAQ
-
-
-ros install elf
-~/.roswell/local-projects
-ln -s ~/quicklisp/local-projects/ ~/.roswell/local-projects
-
-
-ros init
-ros init test
-
-#!/bin/sh
-#|-*- mode:lisp -*-|#
-#|
-exec ros -Q -- $0 "$@"
-|#
-
-(defun fact (n)
-  (if (zerop n)
-      1
-      (* n (fact (1- n)))))
-
-(defun main (n &rest argv)
-  (declare (ignore argv))
-  (format t "~&Factorial ~D = ~D~%" n (fact (parse-integer n))))
-
-./test.ros 3
-ros build test.ros
-**** cl-project
-(cl-project:make-project #p"~/.roswell/local-projects/cl-demo/"
-                                  :depends-on '(:clack :cl-annot))
-https://github.com/fukamachi/cl-project
-http://labs.ariel-networks.com/cl-style-guide.html
-
-**** flexi-streams
-
-https://github.com/edicl
-
- unicode, utf-8, codepage的含义 以及 相互关系
-http://blog.csdn.net/normallife/article/details/8548306
-
-http://weitz.de/flexi-streams/
-
-utf8汉字编码16进制对照
-http://blog.chinaunix.net/uid-25544300-id-3281847.html
-
-(defun bar (pathspec)
-        "With a flexi stream."
-        (with-open-file (out pathspec
-                             :direction :output
-                             :if-exists :supersede
-                             :element-type 'octet
-                                        ;:external-format '(:latin-1 :eol-style :lf)
-                             )
-          (setq out (make-flexi-stream out :external-format :utf-8))
-          (write-line "ÄÖÜ1" out)
-          (setf (flexi-stream-external-format out) '(:latin-1 :eol-style :lf))
-          (write-line "ÄÖÜ2" out)
-          (write-byte #xeb out)
-          (write-byte #xa3 out)
-          (write-byte #xa4 out)
-          (write-byte #xa5 out)
-                                        ;          (write-sequence #(#xa3 #xa4 #xa5) out)
-          (setf (flexi-stream-external-format out) :ucs-2be)
-          (write-line "ÄÖÜ3" out)))
-
-(defun baz (pathspec)
-        (let (result)
-          (with-open-file (in pathspec :element-type 'octet)
-            (setq in (make-flexi-stream in :external-format :utf-8))
-            (push (read-line in) result)
-            (push (read-byte in) result)
-            (setf (flexi-stream-external-format in) '(:latin-1 :eol-style :lf))
-            (push (read-line in) result)
-            (setf (flexi-stream-external-format in) :greek)
-            (push (read-char in) result)
-            (setf (flexi-stream-external-format in) :latin0)
-            (let ((string (make-string 3 :element-type 'character)))
-              (read-sequence string in)
-              (push string result))
-            (let ((octets (make-array 2 :element-type 'octet)))
-              (read-sequence octets in)
-              (push octets result))
-            (setf (flexi-stream-external-format in) :ucs-2be)
-            (push (read-line in) result))
-          (nreverse result)))
-
-**** CFFI
-https://common-lisp.net/project/cffi/manual/html_node/
- (defpackage :cffi-user
-    (:use :common-lisp :cffi))
-  (in-package :cffi-user)
-  (define-foreign-library libcurl
-    (:darwin (:or "libcurl.3.dylib" "libcurl.dylib"))
-    (:unix (:or "libcurl.so.3" "libcurl.so"))
-    (t (:default "libcurl")))
-  (use-foreign-library libcurl)
-
-  (defctype curl-code :int)
-  ;;; Initialize libcurl with FLAGS.
-  (defcfun "curl_global_init" curl-code
-    (flags :long))
-(curl-global-init 0)
-(defcfun "curl_easy_init" :pointer)
-
-  (defcfun "curl_easy_cleanup" :void
-    (easy-handle :pointer))
-(defparameter *easy-handle* (curl-easy-init))
-
-(defmacro define-curl-options (name type-offsets &rest enum-args)
-    (flet ((enumerated-value (type offset)
-             (+ (getf type-offsets type) offset)))
-      `(progn
-         (defcenum ,name
-           ,@(loop for (name type number) in enum-args
-                collect (list name (enumerated-value type number))))
-         ',name)))                ;for REPL users' sanity
-
-  (define-curl-options curl-option
-      (long 0 objectpoint 10000 functionpoint 20000 off-t 30000)
-    (:noprogress long 43)
-    (:nosignal long 99)
-    (:errorbuffer objectpoint 10)
-    (:url objectpoint 2))
-
-(foreign-funcall "curl_easy_setopt"
-               :pointer *easy-handle*
-               curl-option :nosignal :long 1 curl-code)
-
- (defctype easy-handle :pointer)
-
- (defmacro curl-easy-setopt (easy-handle enumerated-name
-                              value-type new-value)
-    `(foreign-funcall "curl_easy_setopt" easy-handle ,easy-handle
-                      curl-option ,enumerated-name
-                      ,value-type ,new-value curl-code))
 
 ** email
 How to get email from exchange server without Outlook
@@ -14811,6 +15007,9 @@ ssid="ACTZH-PAD-FW2"   psk="Actspa@2016"
 4. 还有一台旧的代码服务器：fwgitsrv：root/3392353zzh
 5. 发布服务器srv-padgit-out（192.168.1.11），root/3392353zzh，
 6. jenkins服务器srv-ess-jenkins（192.168.4.27）：fwint/csrd4#fw
+
+
+张东风	ftp_zhangdf	ftp123456
 
 * 出差报告
 ** 2017-0405
