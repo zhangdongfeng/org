@@ -1,0 +1,574 @@
+#+LATEX_HEADER: \usepackage{xeCJK}
+#+LATEX_HEADER: \setCJKmainfont{STKaiti}
+#+OPTIONS: \n:t ^:nil  toc:nil
+#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELED(c)
+
+* 目的
+为了评估后续5118B的mcu开发平台如何支持蓝牙协议栈，对比了如下几个协议栈：
++ Broadcom Wiced BT
+  broadcom的Wiced BT是为IOT开发的一个蓝牙模块，可以做为主控使用，也可以作为模组配置主控使用，支持的功能和蓝牙协议非常丰富。
++ zephyr + IVT
+  在3503目前的sdk上，移植了蓝牙的推歌功能， 主要是A2DP 和AVRCP以及核心的profile。
++ zephyr自带的蓝牙协议栈
+  zephyr操作系统本身也有支持蓝牙协议栈，BLE相对支持比较完善，BR/EDR支持不完善
+* cypress wiced BT sdk
+** CYW20706
+| Technology            | Bluetooth (BR + EDR + BLE)                        |
+| Bluetooth Spec.       | Bluetooth 4.2                                     |
+| RX Sensitivity        | -93.5 dBm                                         |
+| Max. TX Power         | 12 dBm (Programmable TX Power)                    |
+| Power-Class           | Class 1, Class 2                                  |
+| CPU Core              | ARM Cortex M3                                     |
+| Flash/EEPROM          | Ext. Flash/EEPROM support                         |
+| Internal              | 848 KB ROM                                        |
+| SRAM                  | 352 KB                                            |
+| Coexistence Interface | GCI SECI (2-wire)                                 |
+| Serial Interfaces     | 2 UART, 2 SPI, I2C, PCM, I2S                      |
+| ADC                   | 10-bit @ 100 KHz (Static) 13-bit @ 16 KHz (Audio) |
+| GPIOs                 | Up to 24                                          |
+** 特性
+ 1. Bluetooth application
+    + RFCOMM/SPP
+    + A2DP source and sink
+    + AVRCP controller and target
+    + Hands-free AG and HF
+    + BR-EDR and BLE HID Device
+    + BR-EDR HID Host
+    + BLE Client and Server
+    + BLE beacon
+    + Apple ANCS, AMS
+    + Apple HomeKit and iAP2 support (requires add-in package, contact Cypress support for details)
+    + OBEX library and PBAP client profile.
+    + Serial over GATT profile.
+ 2. Peripheral interfaces
+    + GPIO
+    + Timer (Software)
+    + PWM
+    + UART (two instances - one for application download and another for application use).
+    + SPI (two instances - one for serial flash and another for  application use).
+    + I2C (master only).
+    + RTC (Real Time Clock)
+    + Keyscan
+    + ADC (12 bit)
+ 3. Generic profile level abstraction API
+ 4. API to access NV storage areas.
+ 5. WICED Bluetooth Designer to create BR-EDR/BLE sample applications
+   (See WICED Studio menu -> File -> New -> WICED Bluetooth Designer)
+    + Creating Single mode BR-EDR or BLE and Dual Mode applications
+    + Built-in GATT database and BLE profiles (Heart rate monitor, blood pressure, cycling speed, etc.)
+    + Built-in SDP records generation for BR-EDR profiles
+    + Hardware peripherals and interfaces (UART, LED, timers, Battery,  etc.)
+ 6. WICED BT Application Framework
+    + OTA firmware upgrade
+    + Overlay support to load code from NV storage on demand (NV storage dependent latency and power).
+ 7. 可以做为模组使用
+    作为模组使用的话， 也有两种模式：
+    + hci controller模式
+      在这个模式下hci之上的stack都跑在主控上，CYW207xx只跑hci命令
+    + application模式
+      应用和蓝牙的整个协议栈都跑在CYW207xx上，主控和应用通过uart 或 spi采用定制的hci协议交互
+ 8. tools
+    + BTSpy application for viewing embedded BT application and
+      HCI protocol traces.
+    + Manufacturing tools to verify RF performance (mbt and wmbt).
+    + WICED Bluetooth Designer wizard for quickly creating Bluetooth
+      applications.
+      (See Eclipse IDE menu -> File -> New -> WICED Bluetooth Designer)
+    + Segger J-Link debugger using J-Link GDB server and GCC GDB client.
+    + Test tool for automated testing.
+    + low_power_sensor application on 20735B0 platform
+** 目录结构
+| apps      | Example & Test Applications                                                                               |
+| doc       | API & Reference Documentation, Eval Board & Module Schematics                                             |
+| drivers   | Drivers for the USB serial converter                                                                      |
+| include   | WICED API, constants, and defaults                                                                        |
+| libraries | Bluetooth profile and protocol libraries                                                                  |
+| platforms | Configuration files and information for supported  hardware platforms                                     |
+| test      | Tools provided for automation testing tools, wiced_tools : Build tools, compilers, programming tools etc. |
+| WICED     | Core WICED components                                                                                     |
+
+其中：
+apps中都是应用逻辑代码， 和蓝牙协议关系不大。
+libraries中是蓝牙协议栈的一些上层的profile的实现代码，主要有：a2dp_sink_profile avrc_target hidh_lib ams_lib fw_upgrade_lib obex_lib ancs_lib gatt_utils_lib pbap_lib avrc_controller handsfree_profile spp_lib
+WICED中就是bt的核心的协议栈和整个平台的实现，主要是一个rom或ram的镜像，以及平台提供的api的符号定义。
+** WICED BT的可配置方式
+需要注意的是在WICED的cofig目录中有一个配置文件: Wiced-BT/config/A_20703A2.inc
+可以明显的看出是采用的Kconfig的格式， 该文件定义的变量会在makefile的编译选项中作为预定义的宏来使用。 从这里也可以间接看出，他们的内部开发是使用Kconfig系统的，ram和rom的镜像只是特定的一个配置组合的编译输出。
+** A2DP sink例子的分析
+*** 简述
+A2DP的例子实现了一个demo，通过蓝牙建立一个a2dp的链接，实际接收到的数据只做了打印信息输出，并没有真正实现播放器的功能。
+仅仅是演示如何使用a2dp的协议。
+*** 相关各层接口
++----------+--------------------------------------+
+| apps     | a2dp_sink_management_callback        |
+|          | a2dp_sink_control_cback              |
+|          | a2dp_sink_data_cback                 |
++----------+--------------------------------------+
+| librarys | wiced_bt_a2dp_sink_init              |
++----------+--------------------------------------+
+| ROM      | wiced_bt_avdt_register               |
++----------+--------------------------------------+
+|          | wiced_bt_avdt_create_stream          |
+|          | wiced_bt_avdt_connect_req            |
+|          | wiced_audioe_sink_config_init        |
+|          | wiced_audio_sink_register_data_cback |
++----------+--------------------------------------+
+
+*** 工作过程
+1. wiced_bt_stack_init
+   参数1是bt的各种设置，设备名字，查询扫描参数，连接间隔，BLE的广播参数等
+   另外一个参数就是a2dp_sink_management_callback回调函数
+   该回调函数会在bt初始化完成后调用
+2. a2dp_sink_management_callback
+   bt协议栈的各种LMP等核心处理函数，主要配对，链路管理，加密等核心bt时间的处理函数
+   bt底层协议栈初始化完成后，回调此函数，在BTM_ENABLED_EVT事件中来做ad2p的初始化
+3. wiced_bt_a2dp_sink_init
+   参数1是a2dp sink的各个参数，比如codec的参数
+   参数2是一个回调函数 a2dp_sink_control_cback
+
+   应用通过调用该函数来初始化a2dp的协议， a2dp协议的大部分代码都实现在libraries/a2dp_sink_profile/目录下，a2dp依赖的核心协议AVDTP（audio video distribution profile）是实现在ROM中的。比如：wiced_bt_avdt_register wiced_bt_avdt_create_stream wiced_bt_avdt_connect_req wiced_audioe_sink_config_init 等接口
+
+   a2dp协议初始化后，会处理各种AVDTP的事件，把部分需要应用层处理的时间通过调用注册的回调a2dp_sink_control_cback传递给应用，主要包括：
+   + WICED_BT_A2DP_SINK_CODEC_CONFIG_EVT
+   + WICED_BT_A2DP_SINK_CONNECT_EVT
+   + WICED_BT_A2DP_SINK_DISCONNECT_EVT
+   + WICED_BT_A2DP_SINK_START_IND_EVT
+   + WICED_BT_A2DP_SINK_START_CFM_EVT
+   + WICED_BT_A2DP_SINK_SUSPEND_EVT
+4. wiced_audio_sink_register_data_cback
+   应用通过该函数注册a2dp的数据接收的回调， 当有音频数据来的时候就会回调该函数
+*** 主要涉及的文件大小统计：
+| file name                                                           | code size | data size | rodata size |
+| Apps/a2dp_sink/a2dp_sink.c                                          |       488 |        24 |           0 |
+| Apps/a2dp_sink/a2dp_sink_main.c                                     |       744 |         4 |          37 |
+| Apps/a2dp_sink/wiced_bt_cfg.c                                       |         0 |        64 |         221 |
+| libraries/a2dp_sink_profile/wiced_bt_a2dp_sbc.c                     |       122 |         0 |           0 |
+| libraries/a2dp_sink_profile/wiced_bt_a2dp_sink_act.c                |     1,950 |         0 |          44 |
+| libraries/a2dp_sink_profile/wiced_bt_a2dp_sink_api.c                |       192 |         0 |           0 |
+| libraries/a2dp_sink_profile/wiced_bt_a2dp_sink_cfg.c                |       282 |         0 |           0 |
+| libraries/a2dp_sink_profile/wiced_bt_a2dp_sink_main.c               |       920 |       508 |          16 |
+| libraries/a2dp_sink_profile/wiced_bt_a2dp_sink_ssm.c                |       140 |         0 |         416 |
+*** 总结
++ 应用开发是相对简单的， 并且都遵循一定的模式，
+  主要就是完成配置参数，然后注册一些回调来处理感兴趣的事件就可以了，不需要关心蓝牙具体是如何实现的。
+  蓝牙参数的配置，一是可以抄例子的，含义也是相对比较直观的
+  配置确定后，事件的处理就完全是应用层自己的逻辑。
++ 在a2dp的协议实现中，处理了大部分的avdtp的事件，只传递必要的事件给应用层
+  这部分也保持了开源，在遇到兼容性问题的时候，开发者还是可以通过修改这里的代码来解决的。
++ AVDTP， L2CAP ， SDP保持闭源
+  核心的蓝牙协议栈，不大有兼容性问题的部分，保持了闭源，同时也封装了比较好的接口。
+** 各个例子的大小
+除了A2DP的例子外，还提供很多其他的例子，其中有hci字样的都是作为蓝牙模组配合其他主控使用的。另外还提供了一些使用mcu的其他非蓝牙功能的例子。
+具体如下：
++------------------------------------+-----------+-----------+-------------+
+| module name                        | code size | data size | rodata size |
++------------------------------------+-----------+-----------+-------------+
+| spp Apps                           |      1358 |      1102 |         354 |
+| spp libraries                      |       368 |        66 |           0 |
++------------------------------------+-----------+-----------+-------------+
+| a2dp_sink Apps                     |      1558 |        92 |         298 |
+| a2dp_sink libraries                |      3966 |       564 |         476 |
++------------------------------------+-----------+-----------+-------------+
+| handsfree Apps                     |      3786 |       244 |         495 |
+| handsfree libraries                |     12278 |      3746 |         908 |
++------------------------------------+-----------+-----------+-------------+
+| hal_adc_app Apps                   |       474 |        48 |          40 |
++------------------------------------+-----------+-----------+-------------+
+| hal_gpio_app Apps                  |       438 |        52 |          40 |
++------------------------------------+-----------+-----------+-------------+
+| hal_puart_app  Apps                |       478 |         0 |          40 |
++------------------------------------+-----------+-----------+-------------+
+| hal_pwm_app   Apps                 |       366 |        48 |          41 |
++------------------------------------+-----------+-----------+-------------+
+| hello_client Apps                  |      1940 |       121 |         494 |
++------------------------------------+-----------+-----------+-------------+
+| hello_sensor Apps                  |      2028 |       144 |         459 |
++------------------------------------+-----------+-----------+-------------+
+| hci_audio_gateway Apps             |     11294 |      1990 |         918 |
++------------------------------------+-----------+-----------+-------------+
+| hci_audio_remote_control Apps      |      4864 |       194 |         442 |
+| hci_audio_remote_control libraries |      7538 |      3098 |         139 |
++------------------------------------+-----------+-----------+-------------+
+| hci_ble_hid_dev Apps               |      2398 |       401 |         497 |
++------------------------------------+-----------+-----------+-------------+
+| hci_handsfree Apps                 |      4408 |        41 |         302 |
+| hci_handsfree libraries            |      5710 |       890 |         305 |
++------------------------------------+-----------+-----------+-------------+
+| hci_hid_device Apps                |      4932 |      1393 |         678 |
++------------------------------------+-----------+-----------+-------------+
+| hci_hid_host Apps                  |      2782 |         9 |         283 |
+| hci_hid_host libraries             |      4354 |       228 |           0 |
++------------------------------------+-----------+-----------+-------------+
+| hci_pbap_client Apps               |      7864 |      9009 |         483 |
+| hci_pbap_client libraries          |     26410 |      2109 |        2275 |
++------------------------------------+-----------+-----------+-------------+
+| hci_raw_spp Apps                   |      1742 |        96 |         302 |
++------------------------------------+-----------+-----------+-------------+
+| hci_serial_gatt_service Apps       |      6468 |       829 |         524 |
++------------------------------------+-----------+-----------+-------------+
+| hci_uart_spi_bridge Apps           |      1960 |      4159 |         168 |
++------------------------------------+-----------+-----------+-------------+
+| mybeacon Apps                      |       434 |         0 |         221 |
++------------------------------------+-----------+-----------+-------------+
+| ota_firmware_upgrade Apps          |      1256 |        50 |         376 |
+| ota_firmware_upgrade libraries     |      1648 |       282 |           0 |
++------------------------------------+-----------+-----------+-------------+
+| watch Apps                         |     19666 |      2677 |         941 |
+| watch libraries                    |      7682 |      3098 |         139 |
++------------------------------------+-----------+-----------+-------------+
+** 文档
+博通的wiced bt sdk提供的相关文档如下
++ api 文档
+  使用了一个整体的html索引文档， 来管理各个模块的文档，具体模块的api函数是直接通过头文件中的注释使用工具doxgen来生成的html的文档。
+  除了api函数接口文档外， sdk还提供其他文档。
++ 硬件部分
+    BCM920735WCDEVAL_REV03.pdf
+    CYW92070xV3_EVAL-Hardware-User-Guide.pdf
+    CYW920735WCDEVAL-Hardware-User-Manual.pdf
+    CYW9207x9WCDEVAL-Schematic.pdf
++ 快速入门
+    WICED-20719-BT-Quick-Start-Guide.pdf
+    Debugging-Support-Using-J-Link.pdf
+    Manufacturing-Bluetooth-Test-Tool.pdf
++ 组件部分：
+    | WICED-AMS-Library.pdf                          | 访问苹果手机的Apple Media Service                 |   |
+    | WICED-ANCS-Library.pdf                         | 访问苹果手机的Apple Notification Center Service   |   |
+    | WICED-Application-Buffer-Pools.pdf             | 蓝牙协议栈的buffer管理                            |   |
+    | WICED-Application-Filesystem.pdf               | 应用如何通过文件系统操作卡等                      |   |
+    | WICED-BT-Designer-User-Manual.pdf              | 自动生成代码的快速开发蓝牙应用的ide工具           |   |
+    | WICED-Firmware-Upgrade-Library.pdf             | 固件升级                                          |   |
+    | WICED-HCI-Control-Protocol.pdf                 | 不做主控作为hci controller的协议, 通过hci下载应用 |   |
+    | WICED-HCI-Test-System.pdf                      | 通过hci的测试工具                                 |   |
+    | WICED-HID-Device-Library.pdf                   | BLE HID的实现                                     |   |
+    | WICED-SPI-Implementation.pdf                   | 通过spi做hci controller                           |   |
+    | WICED-Secure-Over-the-Air-Firmware-Upgrade.pdf | OTA固件升级                                       |   |
+
+* zephyr + IVT
+** A2DP sink例子的分析
+*** 简述
+A2DP的例子实现了一个demo，通过蓝牙建立一个a2dp的链接, 播放完整的sbc或aac解码
+*** 相关各层接口
+主要分为三层：
+bt app：用来处理应用逻辑， 播放音乐，处理方案规格关心的bt事件
+btmgr：适配ivt协议栈的bt管理层，结合ivt库实现profile的功能。在bt mgr中要要做跟平台相关的各种事务，比如bt协议栈的适配，设备管理，存储管理等。
+IVT库：提供各种和平台无关的bt核心协议的解析。
++----------+--------+------------------------+
+| bt app   |        |                        |
++----------+--------+------------------------+
+|          | LOCAL  | btmgr_ready_cb         |
+|          | LOCAL  | btplay_stream_opened   |
+|          | LOCAL  | btplay_stream_closed   |
+|          | LOCAL  | btplay_pcm_indicated   |
++----------+--------+------------------------+
+| btmgr    | GLOBAL | btmgr_start            |
+|          | LOCAL  | gap_indicate_cb        |
+|          | LOCAL  | gap_set_local_name_cfm |
+|          | LOCAL  | a2dp_indicate_cb       |
++----------+--------+------------------------+
+| IVT GAP  |        |                        |
++----------+--------+------------------------+
+|          | GLOBAL | GAP_SetLocalNameA      |
+|          | GLOBAL | GAP_ResetHardwareA     |
+|          | GLOBAL | GAP_RegisterIndCbk     |
++----------+--------+------------------------+
+| IVT A2DP |        |                        |
++----------+--------+------------------------+
+|          | GLOBAL | A2DP_StreamReconfigure |
+|          | GLOBAL | A2DP_StreamSuspend     |
+|          | GLOBAL | A2DP_StreamStart       |
+|          | GLOBAL | A2DP_GetConfiguration  |
+|          | GLOBAL | A2DP_Connect           |
+|          | GLOBAL | A2DP_Register_SEP      |
+|          | GLOBAL | A2DP_RegCbk            |
+|          | GLOBAL | A2DP_RegisterService   |
++----------+--------+------------------------+
+
+*** 工作流程
+**** 初始化
++ 应用调用btmgr_start来初始化bt协议栈
+  使用btmgr_ready_cb作为回调
++ btmgr_start
+    在btmgr中会通过调用GAP的一系列函数完成btstack的初始化，初始化完成后，回调btmgr_ready_cb。
+    从这里也可以看出IVT协议栈的典型特点，是通过一些列的回调穿起来的， 比如如下序列：
+  + IVT使用者调用GAP_RegisterTransportLayerA设置回调gap_register_tl_cfm
+  + GAP_RegisterTransportLayerA回调gap_register_tl_cfm
+  + gap_register_tl_cfm调用GAP_ResetHardwareA并设置回调gap_reset_hardware_cfm
+  + GAP_ResetHardwareA回调gap_reset_hardware_cfm
+  + gap_reset_hardware_cfm调用GAP_SetLocalNameA并设置回调gap_set_local_name_cfm
+  + gap_set_local_name_cfm 最后会调用btmgr_ready_cb
+    | GAP_RegisterIndCbk          | 设置gap_indicate_cb为GAP的indication的处理函数   |
+    | GAP_RegisterTransportLayerA | 设置协议栈使用的传输方式以及gap_register_tl_cfm  |
+    | GAP_ResetHardwareA         |  复位并设置 gap_reset_hardware_cfm                |
+    | GAP_SetLocalNameA          |  设置bt设备名字，并设置回调gap_set_local_name_cfm |
++ btmgr_ready_cb
+  调用A2DP_RegisterService注册A2DP服务，设置a2dp_indicate_cb为A2DP事件的回调，同时记录应用层注册的回调
+  调用A2DP_Register_SEP注册服务端点（sbc acc）
+  最后调用GAP_SetVisualModeA设置GAP角色，让蓝牙变得可以被发现和连接。这样在有GAP相关的连接请求时就会会调用GAP_RegisterIndCbk设置的gap_indicate_cb回调函数
+**** A2DP连接建立
++ gap_indicate_cb
+  bt协议的基本处理都是通过GAP的事件回调开始的，在 gap_indicate_cb中处理GAP_IND_CONNECTION_EVENT事件来处理bt设备连接
++ a2dp_indicate_cb
+  bt连接建立后， 会通过a2dp_indicate_cb来处理各种a2dp的时间，如A2DP_EV_STREAMOPEN，在该事件的处理中会通过回调应用层注册的处理函数btplay_stream_opened
++ btplay_stream_opened
+  应用层的具体处理逻辑，比如播放提示音什么的。
+*** 各模块大小
++---------------+------------------+-----------+-----------+-------------+
+|               | module name      | code size | data size | rodata size |
++---------------+------------------+-----------+-----------+-------------+
+| bt app        | btplay           |      1532 |         4 |          60 |
++---------------+------------------+-----------+-----------+-------------+
+| bt mgr        |                  |     17144 |      4200 |         739 |
++---------------+------------------+-----------+-----------+-------------+
+|               | actions/btdrv/   |     15676 |        69 |         712 |
+|               | actions/btmgr/   |     12820 |      4127 |          27 |
+|               | actions/btstack/ |      2348 |         4 |           0 |
++---------------+------------------+-----------+-----------+-------------+
+| baseband      |                  |    285960 |      7118 |        5458 |
++---------------+------------------+-----------+-----------+-------------+
+|               | core/lc/         |     65840 |      3112 |          16 |
+|               | core/hc/         |     15104 |        28 |         680 |
+|               | core/hw_rf/      |     30652 |       514 |        2144 |
+|               | core/hw/         |      1212 |         0 |           0 |
+|               | core/le/         |     44368 |       683 |          13 |
+|               | core/lmp/        |     99688 |      1783 |        1585 |
+|               | core/sys/        |      2716 |       902 |        1020 |
+|               | core/bt          |      4232 |        30 |           0 |
+|               | core/tc/         |     10182 |         0 |           0 |
+|               | core/hcit/       |      2734 |         9 |           0 |
+|               | core/transport/  |      9232 |        57 |           0 |
++---------------+------------------+-----------+-----------+-------------+
+| core profiles |                  |     67416 |       159 |        1507 |
++---------------+------------------+-----------+-----------+-------------+
+|               | hci_             |     19370 |        16 |        1003 |
+|               | gap_             |     11136 |        44 |         144 |
+|               | l2cap_           |     21176 |         5 |         224 |
+|               | sdap_            |      6016 |        75 |           0 |
+|               | sdp              |      9718 |        19 |         136 |
++---------------+------------------+-----------+-----------+-------------+
+| profiles      |                  |     37446 |       628 |             |
++---------------+------------------+-----------+-----------+-------------+
+|               | a2dp_            |      1692 |         8 |           0 |
+|               | avctp_           |      3266 |         4 |           0 |
+|               | avdtp_           |      9672 |         5 |           0 |
+|               | avrcp_           |     10846 |         4 |           0 |
++---------------+------------------+-----------+-----------+-------------+
+| others        |                  |           |           |             |
++---------------+------------------+-----------+-----------+-------------+
+|               | others           |     11970 |       607 |           0 |
++---------------+------------------+-----------+-----------+-------------+
+*** 总结
++ 应用开发是相对简单的，只需要注册关心的事件的回调就可以了。 但提供给应用开发的个性化的配置较少。
++ btmgr层中，需要按照IVT的接口，提供各个核心协议要求的回调，每一个profile的开发都需要严格按照协议处理各个层次的bt协议的内容，为了实现一个简单的profile就需要和各个核心的profile都做一些适配，不同核心协议需要通过多级的回调才可以串起来。相对比较啰嗦，需要的胶水代码较多。
++ 底层协议的很多配置信息都体现在这里的回调函数中，如果用户需要修改到配置，就需要在这里修改，而不是应该层修改。
++ IVT协议相对独立，规范性好，协议的完备性也都有。凡是需要用户处理的部分都通过回调的方式开放出来了。
++ 已经量产验证过，协议的兼容性相对有保证
++ 资源开销不好，IVT本身还要加上上层的管理层才是一个完整的整体，相对较大
+
+* zephyr bluetooth
+#+OPTIONS: \n:t ^:nil  toc:nil
+** A2DP sink例子的分析
+*** 简述
+zephyr目前a2dp的实现还很不完全， 只是编译了一下相应文件，没有真正的功能的。
+*** 相关各层接口
+zephyr的bt的协议栈的结构是比较清晰的， 并且与IVT协议栈相比， 除了协议本身，设备管理等必须的功能也完成了。
+
+zephyr的蓝牙协议的各层都遵循一定的模式有点类似linux的sock编程。
+对固定的L2CAP通道，比如br/edr的信令通道， LE的ATT和信令通道，使用固定的server来处理，在hci的对应事件发生的时候，调用server的accept来建立和初始化通道。
+对动态的或者使用psm来多路复用的信道，在l2cap上的每种协议都有一个bt_l2cap_server，每个server的accecpt方法会在有对应psm的链接请求的时候被调用。在accept方法中会负责初始化新建的channel的处理函数bt_l2cap_chan_ops。AVDTP就是这样的一个server。
+
+a2dp协议和avdtp协议之间采用自定义的回调的方式来解耦。
+
+在zephyr的蓝牙协议栈中，并没有明显的看到GAP协议的位置，这是因为GAP中定义的参数，角色等都是通过zephyr的编译配置等方式实现了。用户通过修改配置项来达成GAP的功能。
+
++-------+--------+---------------------------------+
+| A2DP  |        |                                 |
++-------+--------+---------------------------------+
+|       | GLOBAL | bt_a2dp_register_endpoint       |
+|       | GLOBAL | bt_a2dp_init                    |
+|       | GLOBAL | a2dp_accept                     |
+|       | GLOBAL | get_new_connection              |
+|       | GLOBAL | a2d_reset                       |
++-------+--------+---------------------------------+
+| AVDTP |        |                                 |
++-------+--------+---------------------------------+
+|       | GLOBAL | bt_avdtp_init                   |
+|       | GLOBAL | bt_avdtp_register_sep           |
+|       | GLOBAL | bt_avdtp_register               |
+|       | GLOBAL | bt_avdtp_l2cap_recv             |
+|       | GLOBAL | bt_avdtp_l2cap_connected        |
+|       | GLOBAL | bt_avdtp_l2cap_accept           |
+|       | GLOBAL | bt_avdtp_l2cap_disconnected     |
++-------+--------+---------------------------------+
+| conn  |        |                                 |
++-------+--------+---------------------------------+
+|       | GLOBAL | bt_conn_init                    |
+|       | GLOBAL | bt_conn_process_tx              |
+|       | GLOBAL | bt_conn_create_pdu              |
+|       | GLOBAL | bt_conn_lookup_handle           |
+|       | GLOBAL | bt_conn_prepare_events          |
+|       | GLOBAL | bt_conn_recv                    |
+|       | GLOBAL | bt_conn_identity_resolved       |
+|       | GLOBAL | bt_enable                       |
+|       | GLOBAL | bt_recv                         |
++-------+--------+---------------------------------+
+| L2CAP |        |                                 |
++-------+--------+---------------------------------+
+|       | GLOBAL | bt_le_conn_params_valid         |
+|       | GLOBAL | bt_l2cap_br_init                |
+|       | GLOBAL | bt_l2cap_br_fixed_chan_register |
+|       | GLOBAL | bt_l2cap_br_recv                |
+|       | GLOBAL | bt_l2cap_br_server_register     |
+|       | GLOBAL | bt_l2cap_br_connected           |
+|       | LOCAL  | l2cap_br_recv                   |
++-------+--------+---------------------------------+
+
+*** 工作流程
+**** 初始化
++ bt_a2dp_init
+  应用调用bt_avdtp_register(& avdtp_cb );注册a2dp的回调a2dp_accept，之后调用bt_enable就可以了。
++ bt_enable
+  用户首先调用bt_enable注册回调，该回调会在蓝牙初始化好后调用，蓝牙初始化会异步进行。
+  后台启动蓝牙初始化
++ bt_init
+  hci_init用来通过hci完成蓝牙的初始化，br_init用来初始化传统蓝牙
+  bt_conn_init用来初始化协议栈的链接管理，会初始化att，smp， l2cap等核心协议，其中bt_l2cap_br_init初始化l2cap层
++ bt_l2cap_br_init
+  bt_l2cap_br_fixed_chan_register为l2cap的信令通道注册处理函数
+  然后为基于l2cap的各个协议（psm）注册处理函数，分别是bt_rfcomm_init，bt_avdtp_init，bt_sdp_init，bt_a2dp_init。
+  bt_avdtp_init调用bt_l2cap_br_server_register注册bt_avdtp_l2cap_accept是avdtp的协议处理函数
++ bt_avdtp_l2cap_accept
+  回调a2dp_accept来产生一个bt_avdtp的session，并设置对应的l2cap的channel的处理函数为 static struct bt_l2cap_chan_ops ops = {
+                .connected = bt_avdtp_l2cap_connected,
+                .disconnected = bt_avdtp_l2cap_disconnected,
+                .recv = bt_avdtp_l2cap_recv,
+****  A2dp链接建立
+从中断程序开始到应用程序的回调流程大概如下：
+hci_rx_thread
+   bt_conn_recv
+     bt_l2cap_recv
+       l2cap_chan_recv
+         bt_avdtp_l2cap_recv
+
+*** 各模块大小
+
++----------------------+------------------------------+--------+-------+------+
+| bluetooth host       |                              |  36812 |  6703 | 1439 |
++----------------------+------------------------------+--------+-------+------+
+|                      | host/a2dp.c                  |    116 |    92 |    0 |
+|                      | host/at.c                    |    102 |     0 |    0 |
+|                      | host/att.c                   |  3,688 |   228 |  216 |
+|                      | host/avdtp.c                 |    206 |     8 |    0 |
+|                      | host/conn.c                  |  3,946 | 1,260 |   16 |
+|                      | host/gatt.c                  |  1,284 |   332 |    0 |
+|                      | host/hci_core.c              |  7,084 | 2,608 |    0 |
+|                      | host/hfp_hf.c                |    276 |   392 |  300 |
+|                      | host/keys.c                  |    264 |   104 |    0 |
+|                      | host/keys_br.c               |     76 |   104 |    0 |
+|                      | host/l2cap.c                 |  3,262 |   168 |    0 |
+|                      | host/l2cap_br.c              |  3,236 |   212 |    0 |
+|                      | host/rfcomm.c                |  3,282 |   208 |  256 |
+|                      | host/sdp.c                   |  2,496 |   377 |  216 |
+|                      | host/smp.c                   |  7,408 |   610 |  418 |
+|                      | host/uuid.c                  |     86 |     0 |   17 |
+|                      | common/rpa.c                 |    142 |     0 |    0 |
++----------------------+------------------------------+--------+-------+------+
+| bluetooth controller |                              |  37890 |  5291 |   32 |
++----------------------+------------------------------+--------+-------+------+
+|                      | controller/hal/nrf5/cntr.c   |    136 |     1 |    0 |
+|                      | controller/hal/nrf5/ecb.c    |    142 |     0 |    0 |
+|                      | controller/hal/nrf5/radio.c  |  1,610 |   535 |    0 |
+|                      | controller/hal/nrf5/rand.c   |    252 |     4 |    0 |
+|                      | controller/hci/hci.c         |  4,240 |   166 |    0 |
+|                      | controller/hci/hci_driver.c  |    318 | 1,744 |   16 |
+|                      | controller/ll_sw/crypto.c    |     64 |    20 |    0 |
+|                      | controller/ll_sw/ctrl.c      | 23,888 |   392 |   16 |
+|                      | controller/ll_sw/ll.c        |    560 | 1,308 |    0 |
+|                      | controller/ll_sw/ll_adv.c    |  1,068 |    16 |    0 |
+|                      | controller/ll_sw/ll_filter.c |  3,012 |   691 |    0 |
+|                      | controller/ll_sw/ll_master.c |    156 |     0 |    0 |
+|                      | controller/ll_sw/ll_scan.c   |    180 |     6 |    0 |
+|                      | controller/ticker/ticker.c   |  1,262 |    88 |    0 |
+|                      | controller/util/mayfly.c     |    580 |   320 |    0 |
+|                      | controller/util/mem.c        |    246 |     0 |    0 |
+|                      | controller/util/memq.c       |      0 |     0 |    0 |
+|                      | controller/util/util.c       |     34 |     0 |    0 |
++----------------------+------------------------------+--------+-------+------+
+
+*** 总结
++ 架构清晰，各个层次耦合较少，应用开发简单
++ 有很方便的可配置性，不要的功能可以很方便的配置掉
++ 资源开销很少，包含了BLE的核心协议栈只有30~40K
++ BLE的支持比较完善，
++ BR/EDR的支持，可以明显看到只完成了一部分工作，完成度不是太好
+* 协议栈对比
++-------------+-----------------------------+-----------------------+--------------------+
+|             | Broadcom                    | IVT+zephyr            | zephyr             |
++-------------+-----------------------------+-----------------------+--------------------+
+| 协议支持    | RFCOMM/SPP                  | a2dp_ui               | a2dp               |
++-------------+-----------------------------+-----------------------+--------------------+
+|             | A2DP source and sink        | avdtp_ui              | gatt               |
+|             | AVRCP controller and target | goep_ui               | hfp_hf             |
+|             | Hands-free AG and HF        | l2cap_ui              | rfcomm             |
+|             | BR-EDR and BLE HID Device   | rfcomm_ui             | att                |
+|             | BR-EDR HID Host             | smp_ui                | hci                |
+|             | BLE Client and Server       | att_ui                | l2cap              |
+|             | BLE beacon                  | avrcp_ui              | sdp                |
+|             | Apple ANCS, AMS             | hci_ui                | avdtp              |
+|             | Apple HomeKit and iAP2      | obexui                |                    |
+|             | OBEX library and PBAP       | sdap_ui               |                    |
+|             | Serial over GATT profile.   | spp_app_ui            |                    |
+|             |                             | avctp_ui              |                    |
+|             |                             | gap_ui                |                    |
+|             |                             | hfp_ui                |                    |
+|             |                             | pbap_ui               |                    |
+|             |                             | sdpui                 |                    |
+|             |                             | spp_ui                |                    |
++-------------+-----------------------------+-----------------------+--------------------+
+| profile开发 | 核心profile实现在ROM中      | IVT只负责协议解析相关 | hci之上开源        |
+|             | 应用profile较齐全，并开源   | 开发相对相对繁琐      | profile开发简单    |
+|             | 用户需要较少修改就可以      | IVT的相对不太容易理解 |                    |
++-------------+-----------------------------+-----------------------+--------------------+
+| 应用开发    | 简单                        | 简单                  | 简单               |
+|             | 不开源部分提供可配置性好    | 尚未提供太多可配置性  | 可配置通过代码完成 |
++-------------+-----------------------------+-----------------------+--------------------+
+| 资源开销    | 848KB ROM 352K RAM          | 130k                  | 21K                |
++-------------+-----------------------------+-----------------------+--------------------+
+| 完备性      | BR/EDR/BLE完善              | 支持了A2DP和AVRCP     | BR/EDR支持不完善   |
+|             | 应用profile完善并有demo     |                       | BLE支持相对完善    |
++-------------+-----------------------------+-----------------------+--------------------+
+| 兼容性      | 只提供协议demo，无考虑      |                       |                    |
+|             | 协议本身估计是测试过PTS的   |                       |                    |
++-------------+-----------------------------+-----------------------+--------------------+
+
+说明:
++ 协议支持
+  从协议支持上来看， broadcom的支持非常丰富，ER/EDR/BLE支持都非常完善， 同时也支持了大部分常见的应用profile， 包括苹果的BLE的profile。 除了支持 音频，打电话，还支持电话本，hid等。 除此之外还可以支持通过usb，uart以及spi来作为外挂的模组来搭配别的主控使用。
+
+  IVT库支持的协议相对也比较全，音频，打电话之外，也支持电话本等协议，
+
+  zephyr的协议相对支持的会少一些，ble是比较完善的， BR/EDR的支持都是实验性质的，已经支持的几个有些也是半成品。
+
++ profile开发
+  对常用的profile broadcom平台都提供了开源的基本实现，使用profile要做个性话的修改，或者解决兼容性问题的话，估计小修改就可以了。
+  大部分核心的profile broadcom的实现是放在rom中的，对外提供封装好的借口。
+
+  IVT库的特点是对蓝牙的协议解析规范支持比较完善，对所有在蓝牙协议上都通过回调的方式交给平台去实现，这样的选择就暴露了特别多的接口，开发一个profile经常需要从协议栈上各个依赖的profile都做好个性化的处理，也需要提供蓝牙设备管理，存储管理等才能够完成一个完整的profile开发， 开发相对繁琐，代码量也会多一些。同时，ivt协议的接口也需要较大的学习曲线。
+
+  zephyr在hci之上都是开源的，并且对协议层也有比较好的分层，开发相对简单直接。整个协议栈是完整重写的，同时协议栈的解析也和平台相关的功能有机的结合起来了，写出的代码会明显小一些，应用profile开发一般只需要关注对应的profile即可， 不太需要关注底层的profile，相对会容易一些。
+
++ 应用开发
+  在profie开发中，做好分层和抽象后，把应用和profile做好隔离后， 应用开发都相对比较简单。
+
++ 资源开销
+  资源统计主要统计了代码的大小，主要是BR/EDR的核心profile(L2CAP  SDP HCI GAP)，加上A2DP 和 AVRCP这两个profile。 数据的统计没有放在这里，主要是因为不好统计动态内存。只统计全局变量意义不大。
+
+  broadcom由于核心的profile都是在rom中，同时rom中除了蓝牙协议栈，还有非常多的其他功能，因此不太好统计实际大小
+  IVT由于需要个性化东西太多，适配代码比较多，因此相对代码会多一些
+  zephyr会明显小很多的，原因有如下几点：
+  + 很多ivt需要代码完成的功能是通过编译可配置完成的， 比如GAP。
+  + 协议的解析和对于的动作都是在一层完成的，模块化更好，没有使用ivt绕来绕去的流程，代码也简洁直接得多
+  + profile还未完善，代码也会偏少一些
++ 兼容性的考虑
+  从broadcom平台来看，提供的应用仅仅是demo协议栈使用，比如a2dp收到数据直接丢掉，事件处理仅仅是打印而已。
+  而按照我们做产品的经验来看，很多的兼容性问题都是手机等设备不规范，需要应用层解决的，所以这部分的兼容性只能在使用平台的人在做产品的时候解决。
+  profile本身的蓝牙协议的兼容性，可以考虑使用sig的协议测试工具来解决。

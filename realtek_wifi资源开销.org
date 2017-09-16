@@ -1,0 +1,175 @@
+#+LATEX_HEADER: \usepackage{xeCJK}
+#+LATEX_HEADER: \setCJKmainfont{STKaiti}
+#+OPTIONS: \n:t ^:nil  toc:nil
+#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELED(c)
+* 资源开销
+编译了rtk iot wifi的例子，初步看了下资源的开销， 从目前看，在5116平台静态的资源应该够用，动态的资源目前使用了ST的板子，只跑起来了一部分，在wifi_init成功后， 在wifi_startup的时候有报错，动态内存，wifi目前看到使用了大概30K左右。
+还不确定跑典型应用，比如iperf的动态内存开销。
+
+** 静态资源
+
+| module name           | code size | data size | rodata size |
+ | 模组使用的AT命令 | 2,854     |       928 |           0 |
+ | wpa_supplicant        | 16,606    |       208 |       2,763 |
+ | wifi相关API | 11,800    |       796 |         119 |
+ | WIFI驱动 | 136,598   |     7,331 |      63,216 |
+ | lwip协议栈       | 23,452    |    21,380 |         148 |
+ | freertos            | 3,736     |    85,448 |           0 |
+ | stm32f4xx  | 2,184     |        16 |           0 |
+ | 其他              | 5,054     |       542 |          10 |
+
+说明：
++ 例子的主要功能
+  初始化wifi，然后进入一个命令行，在命令行可以通过AT命令执行wifi的各种操作，扫描，链接ap等
++ 总共需要300k左右的代码空间，数据空间为116k左右
++ realtek的驱动和wifi的firmware加起来需大约200K左右的nor空间， 其中wifi固件60多K
++ lwip协议栈使用的20多K主要是协议栈的buf， freeRTOS中的85k空间是系统heap，
+** 动态内存
+使用stm32f411跑了一下， 在成功wifi init之后，wifi startup有报错, 大致统计到的内存如下：
+
+|idle stack|	520|
+|Tmr svc stack|	2056|
+|Tcp_ip stack|	4008|
+|Interactive mode stack|	5128	|
+|Log server stack|	5128|
+|queue|	256|
+|Rtw_if1_init|	6488|
+|Rtw_if1_init|	4216|
+|Rtw_if1_init|	808|
+|Rtw_if1_init|	944|
+|Rtw_if1_init|	880|
+|Rtw_if1_init|	144|
+|Rtw_if1_init|	560|
+|Rtw_if1_init|	1680|
+|Wifi_scan_networks|	3336|
+
+初始化完大块占用内存数	36152
+
+* 移植
+rtk的移植封装还是比较好的，对外部依赖的函数并不是太多，并且都提供了参考实现。
+** 硬件接口
+支持SPI接口和SDIO接口，中断可以使用GPIO的方式，因此可以在我们的5116平台使用
+** Wlanlib
+跟wifi相关的代码主要wlan.lib中， 该库除了依赖外部的C库外，
+在osdep_service函数指针表中，实现了大部分依赖os的实现，
+ osdep_service_ops osdep_service = {
+        _freertos_malloc,		//rtw_vmalloc
+        _freertos_zmalloc,		//rtw_zvmalloc
+        _freertos_mfree,			//rtw_vmfree
+        _freertos_malloc, //rtw_malloc
+        _freertos_zmalloc, //rtw_zmalloc
+        _freertos_mfree, //rtw_mfree
+        _freertos_memcpy, //rtw_memcpy
+        _freertos_memcmp, //rtw_memcmp
+        _freertos_memset, //rtw_memset
+        _freertos_init_sema, //rtw_init_sema
+        _freertos_free_sema, //rtw_free_sema
+        _freertos_up_sema, //rtw_up_sema
+        _freertos_down_sema, //rtw_down_sema
+        _freertos_mutex_init, //rtw_mutex_init
+        _freertos_mutex_free, //rtw_mutex_free
+        _freertos_mutex_get, //rtw_mutex_get
+        _freertos_mutex_put, //rtw_mutex_put
+        _freertos_enter_critical,		//rtw_enter_critical
+        _freertos_exit_critical,		//rtw_exit_critical
+        NULL,		//rtw_enter_critical_bh
+        NULL,		//rtw_exit_critical_bh
+        _freertos_enter_critical_mutex,		//rtw_enter_critical_mutex
+        _freertos_exit_critical_mutex,		//rtw_exit_critical_mutex
+        _freertos_spinlock_init, //rtw_spinlock_init
+        _freertos_spinlock_free, //rtw_spinlock_free
+        _freertos_spinlock, //rtw_spin_lock
+        _freertos_spinunlock, //rtw_spin_unlock
+        _freertos_spinlock_irqsave,	//rtw_spinlock_irqsave
+        _freertos_spinunlock_irqsave,//rtw_spinunlock_irqsave
+        _freertos_init_xqueue,//rtw_init_xqueue
+        _freertos_push_to_xqueue,//rtw_push_to_xqueue
+        _freertos_pop_from_xqueue,//rtw_pop_from_xqueue
+        _freertos_deinit_xqueue,//rtw_deinit_xqueue
+        _freertos_get_current_time, //rtw_get_current_time
+        _freertos_systime_to_ms, //rtw_systime_to_ms
+        _freertos_systime_to_sec, //rtw_systime_to_sec
+        _freertos_ms_to_systime, //rtw_ms_to_systime
+        _freertos_sec_to_systime, //rtw_sec_to_systime
+        _freertos_msleep_os, //rtw_msleep_os
+        _freertos_usleep_os, //rtw_usleep_os
+        _freertos_mdelay_os, //rtw_mdelay_os
+        _freertos_udelay_os, //rtw_udelay_os
+        _freertos_yield_os, //rtw_yield_os
+
+        _freertos_init_timer, //rtw_init_timer
+        _freertos_set_timer, //rtw_set_timer
+        _freertos_cancel_timer_ex, //rtw_cancel_timer
+        _freertos_del_timer, //rtw_del_timer
+
+        _freertos_ATOMIC_SET, //ATOMIC_SET
+        _freertos_ATOMIC_READ, //ATOMIC_READ
+        _freertos_ATOMIC_ADD, //ATOMIC_ADD
+        _freertos_ATOMIC_SUB, //ATOMIC_SUB
+        _freertos_ATOMIC_INC, //ATOMIC_INC
+        _freertos_ATOMIC_DEC, //ATOMIC_DEC
+        _freertos_ATOMIC_ADD_RETURN, //ATOMIC_ADD_RETURN
+        _freertos_ATOMIC_SUB_RETURN, //ATOMIC_SUB_RETURN
+        _freertos_ATOMIC_INC_RETURN, //ATOMIC_INC_RETURN
+        _freertos_ATOMIC_DEC_RETURN, //ATOMIC_DEC_RETURN
+
+        _freertos_modular64, //rtw_modular64
+        _freertos_get_random_bytes,			//rtw_get_random_bytes
+        _freertos_GetFreeHeapSize,		//rtw_getFreeHeapSize
+
+        _freertos_create_task,		//rtw_create_task
+        _freertos_delete_task,		//rtw_delete_task
+        _freertos_wakeup_task,		//rtw_wakeup_task
+
+        _freertos_thread_enter,		//rtw_thread_enter
+        _freertos_thread_exit,		//rtw_thread_exit
+
+        _freertos_timerCreate,           //rtw_timerCreate,
+        _freertos_timerDelete,           //rtw_timerDelete,
+        _freertos_timerIsTimerActive,    //rtw_timerIsTimerActive,
+        _freertos_timerStop,             //rtw_timerStop,
+        _freertos_timerChangePeriod      //rtw_timerChangePeriod
+};
+
+除此之外，还依赖与如下接口。
+| Set_WLAN_Power_Off          | wifi电源关闭             |
+| Set_WLAN_Power_On           | wifi电源打开             |
+| WLAN_BSP_Transfer           | 传输数据                 |
+| config_method               | WIFI的配置方式           |
+| is_promisc_callback_unlock  | 混杂模式回调             |
+| netif_get_hwaddr            | 获取wifi的mac地址        |
+| netif_is_valid_IP           | 判断ip的正确性           |
+| netif_pre_sleep_processing  | wifi休眠前处理           |
+| netif_post_sleep_processing | wifi休眠后处理           |
+| netif_rx                    | 上发网络数据到协议栈     |
+| os_get_random               | 获取随机数               |
+| os_malloc                   | 分配动态内存             |
+| os_mfree                    | 释放动态内存             |
+| os_strdup                   | 复制string               |
+| os_xqueue_send              | 队列发送                 |
+| g_ap_sta_num                | ap模式支持的链接个数     |
+| paff_array                  | 混杂模式的包过滤表       |
+| queue_for_credential        | WPS功能                  |
+| save_and_cli                | 保存中断标志，进入临界区 |
+| restore_flags               | 恢复标志，退出临界区     |
+| rltk_wlan_get_ip            | 获取IP                   |
+| rltk_wlan_set_netif_info    | 设置网络接口信息         |
+| wext_get_enc_ext            | wpa支持                  |
+| wext_get_mode               | wpa获取加密模式          |
+| wext_get_ssid               | 获取ssid                 |
+| wext_set_gen_ie             | wpa支持                  |
+| wext_wlan_indicate          | wpa支持                  |
+| wps_password_id             | wpa支持                  |
+| wps_pin_code                | wpa支持                  |
+* 需要的支持
++ 动态内存的估计
+  我们只需要支持STA模式，WIFI的性能有2~3Mbps的性能就可以满足要求了， 在SPI模式，或者SDIO模式下， 最小需要的动态内存是多少，这个希望能够帮忙给下
++ 提供mips版本的，基于GCC工具链的库
+  目前拿到的SDK中，只有keil编译环境的，arm的库。
+  因此需要一个mips4k版本的，gcc编译环境的库，具体的编译环境我们可以提供
++ 提供一个可以运行sdk的板子和模组
+  目前的板子和模组是我们自己搭建的，现在在arm平台上不能全部的跑起来，因此需要提供一个可以用的板子，或者告诉我们在哪里可以买到
+  如果有mips的板子，提供一个可以实际运行的mips的板子会更好。
++ 移植过程中遇到问题需要提供技术支持
+  目前看起来是可以移植的，但后续移植中可能会遇到一些问题，需要提供技术支持才可以。
+  最好能够提供带有调试打印的库，方便问题定位。

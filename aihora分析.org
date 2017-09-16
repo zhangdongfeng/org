@@ -1,0 +1,549 @@
+
+* 内存布局
+
+| START     | END       | USED      | MEMORY              |
+| 000022H.0 | 00002FH.7 | 000000H.6 | BIT                 |
+| 00000CH   | 00001FH   | 000008H   | DATA                |
+| 009607H   | 00EFFFH   | 000E00H   | EDATA               |
+| 00F000H   | 00FFDFH   | 000E6AH   | EDATA_HIEDATA       |
+| 00FFE0H   | 00FFFFH   | 000002H   | EDATA_PATCH_PARA    |
+| 800040H   | 800FFFH   | 00014EH   | ECODE_STARTUP       |
+| 801000H   | 801FFFH   | 00016EH   | HCONST_MP_PARAM     |
+| 801000H   | 801FFFH   | 000297H   | HCONST_MP_PARAM_F   |
+| 802000H   | 8020FFH   | 000040H   | HCONST_DESCRIP      |
+| 802100H   | 8022FFH   | 0001D4H   | HCONST_CFGHEAD      |
+| 802300H   | 80FFFFH   | 000030H   | CODE                |
+| 802300H   | 84FFFFH   | 000587H   | ECODE               |
+| 802300H   | 84FFFFH   | 000F3AH   | HCONST              |
+| 802300H   | 84FFFFH   | 04695EH   | ECODE_FLASH         |
+| 802300H   | 84FFFFH   | 002082H   | HCONST_FLASH        |
+| 850000H   | 87FFFFH   | 0291A2H   | HCONST_DSP_ROM      |
+| 880000H   | 88FFFFH   | 003DC8H   | HCONST_CONFIG       |
+| 890000H   | 8F5FFFH   | 00D66DH   | HCONST_VO_DAT       |
+| 8F6000H   | 8F6FFFH   | 000FFEH   | HCONST_DSP_FUNCPARA |
+| 8F7000H   | 8F7FFFH   | 00021FH   | HCONST_DSP_HPFPARA  |
+| 8F7000H   | 8F7FFFH   | 0008B0H   | HCONST_DSP_PEQPARA  |
+| 8F8000H   | 8F8FFFH   | 000001H   | HCONST_APP_CALLNAME |
+| 8F9000H   | 8F9FFFH   | 0001F7H   | HCONST_MMI_V_NVRAM2 |
+| 8F9600H   | 8F9FFFH   | 000003H   | MMI_C_V_NVRAM2      |
+| 8FA000H   | 8FAFFFH   | 0001F7H   | HCONST_MMI_V_NVRAM  |
+| 8FA600H   | 8FAFFFH   | 000003H   | MMI_C_V_NVRAM       |
+
+** 模块划分
+
+| module name | code size | data size | rodata size | 开源 |
+| COMMON      |      3924 |       226 |         842 | N   |
+| STARTUP251    |       165 |         0 |           0 |   |
+| \MMI        |     73329 |      1560 |        2928 |   |
+| ROM\LL      |         0 |         0 |           0 |   |
+| \sector     |         0 |         0 |       22300 |   |
+| DRIVER      |     18466 |       282 |         451 |   |
+| \HC         |     20125 |       939 |        1271 |   |
+| \LM         |     94343 |      2526 |        2329 |   |
+| \LC         |     12326 |      2234 |         296 |   |
+| udio        |      4290 |        52 |         328 |   |
+| river_      |      8165 |       147 |           0 |   |
+| \RFCOMM     |      6643 |       146 |         274 |   |
+| \AVCTP      |      1409 |        44 |          18 |   |
+| \AVDTP      |      2978 |        26 |          18 |   |
+| \DSP        |       904 |         5 |           0 |   |
+| \SAP        |         0 |         0 |           0 |   |
+| \OBEX       |         0 |         0 |           0 |   |
+| \OPP        |         0 |         0 |           0 |   |
+| Air         |         0 |         0 |           0 |   |
+| \HID        |         0 |        74 |           0 |   |
+| SDAP        |      6484 |        98 |          55 |   |
+| oice        |      2037 |         5 |       54971 |   |
+| \L2CAP      |      6673 |       380 |         506 |   |
+| \GAP        |      2284 |        25 |           0 |   |
+| \HFP        |      7250 |        94 |        1688 |   |
+| \PBAP       |         0 |         0 |           0 |   |
+| \MAP        |         0 |         0 |           0 |   |
+| \SPP        |         0 |         0 |           0 |   |
+| \LCIF       |         0 |         0 |           0 |   |
+| \iAP2       |         0 |         0 |           0 |   |
+| \SongPal    |         0 |         0 |           0 |   |
+| \SM         |         0 |         0 |           0 |   |
+| \A2DP_      |      7166 |        12 |          76 |   |
+| \ATT        |         0 |         0 |           0 |   |
+| AVRCP       |      4673 |        44 |      184834 |   |
+| _Rom_Only   |     92860 |      3572 |        5498 |   |
+| patch       |         0 |         0 |           0 |   |
+| others      |      6408 |       424 |          88 |   |
+
+** STARTUP251
+keil的c251的运行环境， 完成数据初始化，main函数也在这里。
+** COMMON模块
+| .\source\COMMON\flash_descriptor.obj |0 |0 |64 |0|
+800000    64 OBJECT   LOCAL  _FlashDescriptorAtBegin
+802000    64 OBJECT   LOCAL  _FlashDescriptor
+应该是nor flash的分区划分。
+| .\source\COMMON\BootCode.obj |334 |4 |0 |0|
+800040     3 FUNC     LOCAL OS_NullFuncRtnTrue??
+看起来是一个函数指针，
+800043   331 FUNC     LOCAL  SYS_DecideBootCode??
+boot代码，brom出来应该从这个地方跑起来，跑起来后会填充gFlashDescriptor指向的数据结构，然后再执行sdk_app
+
+9607     4 OBJECT   LOCAL  gFlashDescriptor
+在内存9607的位置定义了一个gFlashDescriptor的全局指针， 指向一个flash descriptor的结构， 这个结构描述了在flash的配置区域放置的各种配置数据。
+
+
+** Flash上的配置信息
+
+*** 配置信息的定义
+配置信息的结构都是类似的方式：
+比如config0的配置：
+| .\output\AB1520S\Release_Flash\sector_config0_header.obj |0 |0 |48 |0|
+802100    48 OBJECT   LOCAL  gSectorConfig0Header
+中定义类一个48字节的配置信息
+
+在源码中 AB1520S_SVN72747_Headset_OBJ/source/SECTOR/sector_config0_header.c中，会有如下代码：
+#pragma userclass (HCONST = CFGHEAD) 指定该文件的数据放到如下段中
+| 802100H   | 8022FFH   | 0001D4H   | HCONST_CFGHEAD      |
+
+在文件后面会定义放到该段中的数据，通过c文件包含头文件的方式定义：
+SECTOR_CFG0_HEADER_STRU CODE gSectorConfig0Header =
+{
+    NUM_OF_SECTOR_CFG0,
+
+    {
+	    #include "sector_config0_member.h"
+	},
+
+	//- CRC
+	{0x2E,0xFE}
+};
+
+在包含的sector_config0_member.h中有如下定义
+SECTORS_ENUM_MACRO(SECTOR_AFE_INIT, &gSector_AfeInit, sizeof(AFE_INIT_STRU), CRC_CHK)
+表示：
+SECTOR_AFE_INIT(802100H) 是gSector_AfeInit指定的ic内部寄存器的值
+
+gSector_AfeInit则定义在AB1520S_SVN72747_Headset_OBJ/source/SECTOR/Config0/sector_afe_init.c中，具体如下， 在同一目录下，定义了gSector_SfrInit gSector_RfMiscCtl gSector_HwMiscCtl。
+
+如下为gSector_AfeInit的定义片段， 每一项是三个byte， 第一个byte是寄存器地址，2，3是寄存器的值。c251是16bit的寄存器
+
+#elif (defined OPERATION_IN_RF_AB1520S)
+SECTOR_AFE_INIT_STRU CODE gSector_AfeInit =
+{
+	{
+	    169, //NumOfAfeRegInit
+
+	    {
+            	  		  //- MCU clock source=48M
+	      		{0x00, 0x99, 0x81},//1
+	    		{0x01, 0x00, 0x00},
+			{0x02, 0xDD, 0x2F},
+			{0x03, 0x55, 0x01},
+			{0x04, 0x21, 0x45},  //{0x04, 0x21, 0x65},  CML workaround for LO spur !!!
+			{0x05, 0x52, 0x14},
+			{0x06, 0xF0, 0x82},
+			{0x07, 0xAA, 0x17},
+			{0x08, 0x66, 0x66},
+			{0x09, 0x69, 0x9F},  //10   {0x09, 0x79, 0x9F} CML workaround for LO spur !!!
+			{0x0A, 0x7B, 0xFD},	//VCO offset work around !!!!!!  {0x0A, 0x7B, 0x7D},
+	   		{0x0D, 0xFE, 0x75},
+			{0x0E, 0xA8, 0xBC},
+			{0x0F, 0xE5, 0xEF},
+			{0x10, 0x38, 0x54},
+			{0x11, 0x5A, 0x3E},
+			{0x12, 0xA6, 0x97}, //{0x12, 0x86, 0x97}, {0x12, 0x96, 0x97}, LO cal offset work around !!!!!!
+
+*** Flash上详细的配置数据
+**** 配置总的入口
+802000    64 OBJECT   LOCAL  _FlashDescriptor
+这个是总的flash descpritor信息， boot代码读取这个扇区的内容，来填充FLASH_DESCRIPTOR_STRU的结构。
+
+在FLASH_DESCRIPTOR_STRU;定义了各类配信息的头部
+
+typedef struct stru_flash_descriptor
+{
+    VOID (*fFlashInitEntry)(VOID);
+    BOOL (*fSectorsCheckFuncEntry)(VOID);
+    OS_GENERIC_PTR pFlashCodeDescriptor;
+    OS_GENERIC_PTR pSectorHdrConfig0;
+    OS_GENERIC_PTR pSectorHdrConfig1;
+    OS_GENERIC_PTR pSectorHdrDspData;
+    OS_GENERIC_PTR pSectorHdrBoundary;
+    OS_GENERIC_PTR pSectorHdrVoiceData;
+    OS_GENERIC_PTR pSectorHdrRuntime;
+    OS_GENERIC_PTR pSectorHdrToolMisc;
+    U32 McuHcontEnd;
+    OS_GENERIC_PTR pSectorHdrRuntime_1;
+    OS_GENERIC_PTR pSectorHdrRuntime_2;
+    OS_GENERIC_PTR reserved_dw52;
+    OS_GENERIC_PTR reserved_dw56;
+    U16 OtaUpgrateVersion;
+    CRC16 CRC;
+} FLASH_DESCRIPTOR_STRU;
+
+**** 配置头部
+
+配置头部是放在如下的存储段中的
+| 802100H   | 8022FFH   | 0001D4H   | HCONST_CFGHEAD      |
+各分类的头部指向，实际的配置信息是存放在如下存储段中的
+| 880000H   | 88FFFFH   | 003DC8H   | HCONST_CONFIG       |
+
+头部信息主要有如下几类
+| .\output\AB1520S\Release_Flash\sector_config0_header.obj |0 |0 |48 |0|
+802100    48 OBJECT   LOCAL  gSectorConfig0Header
+| .\output\AB1520S\Release_Flash\sector_config1_header.obj |0 |0 |219 |0|
+802130   219 OBJECT   LOCAL  gSectorConfig1Header
+| .\output\AB1520S\Release_Flash\sector_boundary_header.obj |0 |0 |48 |0|
+80220B    48 OBJECT   LOCAL  gSectorBoundaryHeader
+| .\output\AB1520S\Release_Flash\sector_voice_data_header.obj |0 |0 |21 |0|
+80223B    21 OBJECT   LOCAL  gSectorVoiceDataHeader
+| .\output\AB1520S\Release_Flash\sector_runtime_header.obj |0 |0 |12 |0|
+802250    12 OBJECT   LOCAL  gSectorRuntimeHeader
+| .\output\AB1520S\Release_Flash\sector_tool_misc_header.obj |0 |0 |21 |0|
+80225C    21 OBJECT   LOCAL  gSectorToolMiscHeader
+| .\output\AB1520S\Release_Flash\sector_dsp_data_header.obj |0 |0 |21 |0|
+802271    21 OBJECT   LOCAL  gSectorDspDataHeader
+| .\output\AB1520S\Release_Flash\sector_merge_runtime_header_1.obj |0 |0 |39 |0|
+802286    39 OBJECT   LOCAL  gSectorRuntimeHeader_1
+| .\output\AB1520S\Release_Flash\sector_merge_runtime_header_2.obj |0 |0 |39 |0|
+8022AD    39 OBJECT   LOCAL  gSectorRuntimeHeader_2
+| .\output\AB1520S\Release_Flash\sector_gap_nvram_type.obj |0 |0 |11 |0|
+***** gSectorConfig0Header
+| .\output\AB1520S\Release_Flash\sector_afe_init.obj |0 |0 |513 |0|
+880E33   513 OBJECT   LOCAL  gSector_AfeInit
+包含了芯片寄存器的初始值
+| .\output\AB1520S\Release_Flash\sector_sfr_init.obj |0 |0 |453 |0|
+881034   453 OBJECT   LOCAL  gSector_SfrInit
+定义了c251特殊寄存器的初始值
+| .\output\AB1520S\Release_Flash\sector_rf_misc_ctl.obj |0 |0 |132 |0|
+8811F9   132 OBJECT   LOCAL  gSector_RfMiscCtl
+配置RF相关的参数
+| .\output\AB1520S\Release_Flash\sector_hw_misc_ctl.obj |0 |0 |15 |0|
+88127D    15 OBJECT   LOCAL  gSector_HwMiscCtl
+RF矫正，电池等硬件杂项配置
+| .\output\AB1520S\Release_Flash\sector_uart_parameter_eng.obj |0 |0 |16 |0|
+881B2E    16 OBJECT   LOCAL  gSector_UartParameterEng
+工程串口配置，波特率，校验位等
+***** gSectorConfig1Header
+| .\output\AB1520S\Release_Flash\sector_sys_local_device_info.obj |0 |0 |52 |0|
+880D70    52 OBJECT   LOCAL  gSector_SysLocalDeviceInfo
+配置蓝牙设备信息，hci信息，设备能力，名称，版本号，参数等
+
+| .\output\AB1520S\Release_Flash\sector_sys_local_device_EIR.obj |0 |0 |54 |0|
+880DA4    54 OBJECT   LOCAL  gSector_SysLocalDeviceEIR
+配置设备的服务能力
+//Service Class UUID
+//- 0x1108: Headset
+//- 0x110B: Audio_Sink
+//- 0x110C: AVRCP Target
+//- 0x110E: AVRCP Control
+//- 0x110F: AVRCP ControlController
+
+| .\output\AB1520S\Release_Flash\sector_sys_local_device_control_type.obj |0 |0 |95 |0|
+880D11    95 OBJECT   LOCAL  gSector_SysLocalDeviceControl
+根据设备类型(soundbar 耳机等)不同配置GPIO， LED显示，电源灯等。
+
+| .\output\AB1520S\Release_Flash\sector_lc_misc_ctl.obj |0 |0 |43 |0|
+8805C9    43 OBJECT   LOCAL  gMISC_ctl_init
+根据设备类型(soundbar 耳机等)，配置master，slave模式sniffer，休眠等参数
+
+| .\output\AB1520S\Release_Flash\sector_lm_parameter_type.obj |0 |0 |6 |0|
+8805F4     6 OBJECT   LOCAL  gSector_LmParameter
+根据设备类型(soundbar 耳机等)，是否支持TWS等，配置Link Manager的参数，
+
+| .\output\AB1520S\Release_Flash\sector_hc_parameter_type.obj |0 |0 |143 |0|
+88053A   143 OBJECT   LOCAL  gHC_parameter_init
+蓝牙扫描，inquiry，page scan，pin类型等链路管理参数
+
+| .\output\AB1520S\Release_Flash\sector_uart_parameter.obj |0 |0 |16 |0|
+880E23    16 OBJECT   LOCAL  gSector_UartParameter
+串口参数配置，是否支持流控，h5等
+
+| .\source\SECTOR\sector_mcu_dsp_parameter_init.obj |0 |0 |22 |0|
+8805FA    22 OBJECT   LOCAL  gMcu_dsp_parameter_init
+未开源，应该是mcu和dsp交互的配置
+
+| .\output\AB1520S\Release_Flash\sector_a2dp_nvram_ctl_type.obj |0 |0 |57 |0|
+880000    57 OBJECT   LOCAL  gA2DP_nvram_ctl_init
+a2dp profile的参数配， sbc和aac code的配置
+
+| .\output\AB1520S\Release_Flash\sector_driver_led_data_type.obj |0 |0 |813 |0|
+880063   813 OBJECT   LOCAL  gDriver_led_data_init
+配置不同工作模式（低电，可连接，链接上等）下LED的闪烁方式
+
+| .\output\AB1520S\Release_Flash\sector_driver_buzzer_data_type.obj |0 |0 |42 |0|
+880039    42 OBJECT   LOCAL  gDriver_buzzer_data_init
+蜂鸣器配置， 频率，长度，次数，重复窗口，重复次数等
+
+| .\output\AB1520S\Release_Flash\sector_driver_ringtone_data_type.obj |0 |0 |426 |0|
+880390     2 OBJECT   LOCAL  gDriver_ringtone_data_init
+定义各种铃声，每个铃声按照如下方式定义
+#define RTDAT_SHORT_1_NOTE_1		NOTE_ME4, METRONOME_1_16_100MS, VOL_BEGIN, VOL_END,
+
+| .\output\AB1520S\Release_Flash\sector_mmi_driver_nvram_backup_type.obj |0 |0 |45 |0|
+880DF0    45 OBJECT   LOCAL  gMMI_Driver_v_nvram_backup
+MMI相关驱动的参数的非零的初始化值。
+
+| .\output\AB1520S\Release_Flash\sector_mmi_nvram_type.obj |0 |0 |1,356 |0|
+8807C5  1356 OBJECT   LOCAL  gMMI_nvram_init
+MMI相关的配置，如下
+	typedef struct
+	{
+		PinCodeCtl pinCodeCtl;
+		BuzzCtl buzzCtl[MMI_BUZZER_TRIGGERED_EVT_NO];
+		PageScanWindowSize pageScanWindowSize;
+		ScoPktPara scoPktPara;
+		ChangePktTypePara changePktTypePara;
+		SimplePairingPara simplePairingPara;
+		MMI1IntInterval mmi1IntInterval;
+		MMIBtnSeqInfo mmiBtnSeqInfo[MAX_BTN_SEQ_NO];
+		SniffPara sniffPara;
+		U8 retrySniffCnt;
+		U8 rssiDefaultBoundry;
+		LedSettingType defaultLedSetting[MMI_TOTAL_STATE_NO];
+		LedSettingType maxLinkLedSetting;
+		U8 lineInAutoDetectKeyIndex;
+		KeypadGpioCtl keypadGpioCtl;
+		ProductType productType;
+		AirParaType airPara;
+		U8 maxPageDevice;
+		U8 missedCallRemindAttempt;
+		U8 discoverableIfPdlLessThan;
+		U8 actionAfterPairingModeTimeout;
+		ReConnectInfo reConnectInfo;
+		MMIFeatureCtl mmiFeatureCtl;
+		SpkGainSet spkGainSet[SOUND_LEVEL_NO];
+		MicGainSet micGainSet[SOUND_LEVEL_NO];
+		VgsTable vgsTable[SOUND_LEVEL_NO];
+		SoundLevel soundLevels[SOUND_LEVEL_NO];
+		SoundLevel musicSoundLevels[SOUND_LEVEL_NO];
+		SoundLevel lineInSoundLevels[SOUND_LEVEL_NO];
+		MmiDecreaseVolWhenLowBatType scoDecreaseGainCtl;
+		MmiDecreaseVolWhenLowBatType a2dpDecreaseGainCtl;
+		MmiDecreaseVolWhenLowBatType lineinDecreaseGainCtl;
+		U8 totalSoundLevel;
+		U8 totalMusicSoundLevel;
+		U8 totalLineInSoundLevel;
+		U8 defaultA2DPSoundLevel;
+		U8 reserved5;
+		U8 defaultVCLevel;
+		MMIVolumeSmallStepsType smallStepVolume;
+		MMIPowerOnInLowBatCtlType powerOnLowBatAction;
+		BatteryPara batteryPara;
+		TimerCtl timerCtl;
+		VoicePromptConfig vpConfig;
+		EvtPara evtParaCtl[EVENT_TABLE_SIZE];
+		U8 key1GpioIndex;
+		LedFilterMap ledFilterMap[MAX_LED_FILTER_NO]; 
+		MMIFCCInfo mmiFCCInfo;	
+		U8 storedLinkKeyCnt;
+		U8 gpioAmpGeneral;
+		U8 gpioAmpBtFm;
+		MmiAvrcpSettings mmiAvrcpSettings;
+		U8 mmiHfpCINDMask;
+		U8 fmSeekTH;
+		U32 reserved4[3];
+		U8	audioPriorityExtra[4];
+		TWS_PARA tws_para;
+		AudioPriorityType audioPriority;
+		// *************************** IMPORTANT************************************
+		// flash code version: 001.62971.3204.0
+		// NOTICE - structure definition above matches specified flash code version.
+		//          DO NOT modify it. ONLY APPENDing fields is allowed.
+		// *************************** IMPORTANT************************************
+		PairCtl	pariCtl;
+		U8 roleSwitchCnt;
+		U8 mcuADCSource;
+		U8 enlargedWaitDetachTime;	//unit: 0.5 sec
+		U8 checkA2DPMediaChannelEstTimeActiveConn;//unit:0.1s
+		U32 GENERIC_PTR sbcFlashAddress;
+		U8 reserved6;
+		U8 reserved7;
+		U8 reserved8;
+		U8 reserved9;
+		U8 reserved10;
+	} MMI_NVRAM_TYPE;
+
+| .\output\AB1520S\Release_Flash\sector_mmi_nvram_keymap.obj |0 |0 |437 |0|
+880610    15 OBJECT   LOCAL  gMMI_nvram_keymap_init
+按键映射表配置， 长按等等
+
+| .\output\AB1520S\Release_Flash\sector_sys_memory_config.obj |0 |0 |22 |0|
+880DDA    22 OBJECT   LOCAL  gSector_SysMemoryConfig
+定义系统的heap的内存分配，根据不同功能来配置不同的系统内存使用， 内存要应该是使用预分配的办法。
+/* CallArrayEntries */          16,
+/* CallArrayEntrySize */        4,
+/* TimerArrayEntries */         50,
+/* TimerArrayEntrySize */       4,
+/* OSMEM1ArrayEnties */         40,
+/* OSMEM1ArrayEntrySize */      50,
+
+| .\output\AB1520S\Release_Flash\sector_sm_nvram_type.obj |0 |0 |6 |0|
+880E1D     6 OBJECT   LOCAL  gSM_nvram_init
+security manager的配置
+
+| .\source\SECTOR\sector_driver_ctl_type.obj |0 |0 |49 |0|
+88128C    11 OBJECT   LOCAL  gGAP_nvram_init
+GAP的蓝牙地址配置
+
+| .\output\AB1520S\Release_Flash\sector_application.obj |0 |0 |10 |0|
+881B24    10 OBJECT   LOCAL  gApplication_init
+应用类型和版本（应该是耳机，soudbar等典型应用吧）
+***** gSectorBoundaryHeader
+| .\output\AB1520S\Release_Flash\sector_mp_parameter.obj |0 |0 |366 |0|
+801000   366 OBJECT   LOCAL  gSector_MpParameter
+量产参数配置， bt qualification， 私钥等
+	MP_SYS_LOCAL_DEVICE_INFO_STRU   MP_SysLocalDeviceInfo;
+	MP_AFE_INIT_STRU		MP_AfeInit;
+	MP_SFR_INIT_STRU        MP_SfrInit;
+	MP_RF_MISC_CTL_STRU		MP_RfMiscCtl;
+	MP_BATTERY_PARA_STRU	MP_BatteryPara;
+	MP_ChargerDiscountCtl	MP_ChargerDiscountCtl[CHARGING_EFF_STATE_NO];
+	MP_ADC_FIELD_STRU       MP_AdcField;
+	U8 CalibrationInfo[NUM_OF_CALIBRATION_INFO];
+	U8 ManufacturingInfo[NUM_OF_MANUFACTURING_INFO];
+
+| .\output\AB1520S\Release_Flash\sector_sys_patch_code_init.obj |0 |0 |136 |0|
+881B3E   136 OBJECT   LOCAL  gSector_SeysPatchCodeInit
+EXTERN SECTOR_MP_PARAMETER_F_STRU CODE gSector_MpParameter_F;
+
+| .\output\AB1520S\Release_Flash\sector_mp_parameter_F.obj |0 |0 |0 |0|
+80116E     0 OBJECT   LOCAL  gSector_MpParameter_F
+保留给用户区的参数配置
+typedef struct stru_mp_parameter_f
+{
+	U8 rsvd;
+	MP_AIO_RELATED_FIELD_STRU AioSet[AIO_TOTAL_SET_NUMBER];
+	U8 reserved[90];
+	U8 Customer_Reserved1[15][32];
+	U8 Customer_Reserved2[30];
+    #ifdef LE_SUPPORTED_HOST_FLASH
+	LE_BD_ADDR_TYPE leBDAddr;           //LE BD address
+	#endif
+} MP_PARAMETER_F_STRU;
+
+***** gSectorVoiceDataHeader
+| .\output\AB1520S\Release_Flash\voice_prompt_ctl.obj | 0 | 0 | 741 | 0 |
+890000    52 OBJECT   LOCAL  gVoiceLangCtl
+890070    68 OBJECT   LOCAL  gVoicePromptScriptOffset_C
+8900B4   212 OBJECT   LOCAL  gVoicePromptDataOffset_C
+8901CD    68 OBJECT   LOCAL  gVoicePromptScriptOffset_E
+890211   212 OBJECT   LOCAL  gVoicePromptDataOffset_E
+提示音的索引，控制数据定义， 提示音的定义是比较精巧的，分成两个部分， 一部分是提示音本身的data， 一部分是提示音的控制脚本scp，
+data是很小的语音单元， 比如“电话”  “取消”是两条单独的语音数据。 通过脚本可以组合出，“电话取消”四个字的语音数据。
+例子如下：（中文的电话取消的定义）
+#define VP_SCP_CALL_CANCELLED_C				VPD(CALL), VPD(CANCELLED)
+890052     2 OBJECT   LOCAL  vp_scp_CALL_CANCELLED_C
+
+| .\output\AB1520S\Release_Flash\voice_prompt_data_1.obj |0 |0 |27,316 |0|
+中文语音数据本身的定义， 典型的单字的数据，比如0~9，电池，蓝牙模式等等
+8902E5   377 OBJECT   LOCAL  vp_dat_0_C
+89045E   377 OBJECT   LOCAL  vp_dat_1_C
+8905D7   362 OBJECT   LOCAL  vp_dat_2_C
+890741   362 OBJECT   LOCAL  vp_dat_3_C
+8908AB   392 OBJECT   LOCAL  vp_dat_4_C
+890A33   377 OBJECT   LOCAL  vp_dat_5_C
+890BAC   362 OBJECT   LOCAL  vp_dat_6_C
+890D16   377 OBJECT   LOCAL  vp_dat_7_C
+890E8F   347 OBJECT   LOCAL  vp_dat_8_C
+890FEA   392 OBJECT   LOCAL  vp_dat_9_C
+891172   302 OBJECT   LOCAL  vp_dat_BATTERY_C
+8912A0   812 OBJECT   LOCAL  vp_dat_BLUETOOTH_MODE_C
+等等
+
+| .\output\AB1520S\Release_Flash\voice_prompt_data_2.obj |0 |0 |26,836 |0|
+英文的语音数据定义， 典型的单字的数据，比如0~9，电池，蓝牙模式等等
+896D99   512 OBJECT   LOCAL  vp_dat_0_E
+896F99   527 OBJECT   LOCAL  vp_dat_1_E
+8971A8   527 OBJECT   LOCAL  vp_dat_2_E
+8973B7   527 OBJECT   LOCAL  vp_dat_3_E
+8975C6   527 OBJECT   LOCAL  vp_dat_4_E
+8977D5   527 OBJECT   LOCAL  vp_dat_5_E
+8979E4   527 OBJECT   LOCAL  vp_dat_6_E
+897BF3   527 OBJECT   LOCAL  vp_dat_7_E
+897E02   527 OBJECT   LOCAL  vp_dat_8_E
+898011   527 OBJECT   LOCAL  vp_dat_9_E
+898220   467 OBJECT   LOCAL  vp_dat_BATTERY_E
+8983F3   542 OBJECT   LOCAL  vp_dat_BLUETOOTH_E
+***** gSectorRuntimeHeader
+| .\source\SECTOR\sector_app_callername_data.obj |0 |0 |1 |0|
+8F8000     1 OBJECT   LOCAL  dummy
+***** gSectorToolMiscHeader
+| .\output\AB1520S\Release_Flash\sector_tool_info.obj |0 |0 |2,089 |0|
+881297  2089 OBJECT   LOCAL  gSector_Tool_Info
+工具版本信息，以及2k大小的dsp参数
+| .\output\AB1520S\Release_Flash\sector_ae_info.obj |0 |0 |51 |0|
+881AC0    51 OBJECT   LOCAL  gSector_AE_Info
+工具配置的AE info
+***** gSectorDspDataHeader
+| .\output\AB1520S\Release_Flash\sector_dsp_func_para.obj |0 |0 |4,094 |0|
+8F6000  4094 OBJECT   LOCAL  gSector_DspFuncParameter
+typedef struct
+{
+	DSP_FUNC_PARA_STRU      dsp_param_parameter;
+
+    /* The order of sections should be same as DSP's */
+    IC_BIST_RELATION      ic_bist_parameter;
+    VP_RELATION           vp_parameter;
+    PLC_RELATION          plc_parameter;
+    SCENARIO_RELATION     scenario_parameter;
+    I2S_DBG_RELATION      i2s_dbg_parameter;
+    STEREO_RELATION       stereo_parameter;
+	U16 I2S_BCLK_RATE;
+    VOICE_RELATION        voice_parameter;
+
+} DSP_FUNC_PARA_CTL_STRU;
+DSP的功能参数配置， 音箱的定义在 "..\DSP\AB1520S_DSP\DSP_PARA_AB1520S_MUSICBOX_TARGET.txt"文件中，主要包含如下内容：
+4路AEC的配置 AEC/NR/AVC， 接收和发送的噪声消除   VAD的配置， 双mic的配置，接收和发送的音效设置，还有一些PLC， PEQ等配置，以及不太看明白的其他配置。
+
+| .\output\AB1520S\Release_Flash\sector_dsp_hpf_param_type.obj |0 |0 |543 |0|
+8F7000   543 OBJECT   LOCAL  gSector_DspHpfParameter
+typedef struct stru_dsp_hpf_param
+{
+	U8							hpf_enable;
+	HPF_CONFIG_SECTOR			a2dp_hpf_config_sector[NUM_OF_MAX_PEQ_CONFIG];
+	HPF_CONFIG_SECTOR			linein_hpf_config_sector[NUM_OF_MAX_PEQ_CONFIG];
+
+} DSP_HPF_PARAMETER_STRU;
+
+| .\output\AB1520S\Release_Flash\sector_dsp_peq_param_type.obj |0 |0 |0 |0|
+8F721F     0 OBJECT   LOCAL  gSector_DspPeqParameter
+typedef struct stru_dsp_peq_param
+{
+	U8							num_of_a2dp_peq_config;
+	U8							num_of_linein_peq_config;
+	PEQ_CONFIG_SECTOR			a2dp_peq_config_sector[NUM_OF_MAX_PEQ_CONFIG];
+	PEQ_CONFIG_SECTOR			linein_peq_config_sector[NUM_OF_MAX_PEQ_CONFIG];
+
+| .\source\SECTOR\sector_dsp_vp_nb.obj |0 |0 |8,706 |0|
+881BC6  8706 OBJECT   LOCAL  gSector_DspVpNb
+***** gSectorRuntimeHeader_1
+| .\output\AB1520S\Release_Flash\sector_mmi_driver_variation_nvram_type.obj |0 |0 |503 |0|
+8FA000   503 OBJECT   LOCAL  gMMI_Driver_v_nvram_init
+typedef struct
+{
+	MMI_LINK_KEY_TYPE link_key_info[NVRAM_LINK_KEY_ITEMS];
+	U8 current_key_index;
+	U8 lastDevInd;
+	MMI_NEW_DEVICE_PARA mmi_new_device_para;
+	U8 auth_requirments;
+
+} MMI_DRIVER_VARIATION_NVRAM_TYPE;
+运行时的参数，用来做设备管理，存储不同设备的linkkey
+
+| .\output\AB1520S\Release_Flash\sector_mmi_customize_v_nvram.obj |0 |0 |3 |0|
+8FA600     3 OBJECT   LOCAL  gMMI_Customize_v_nvram_init
+通过给用户使用的配置区域
+***** gSectorRuntimeHeader_2
+| .\output\AB1520S\Release_Flash\sector_mmi_driver_variation_nvram_type2.obj |0 |0 |503 |0|
+8F9000   503 OBJECT   LOCAL  gMMI_Driver_v_nvram_init2
+typedef struct
+{
+	U8 CheckValid;
+	MISC_PARA_TYPE  misc_para;
+	LinkHistoryType air_link_history_info[NVRAM_AIR_LINK_KEY_NO];
+	LinkHistoryType fast_dongle_link_history_info;
+	LinkHistoryType link_history_info[NVRAM_LINK_KEY_ITEMS];
+} MMI_DRIVER_VARIATION_NVRAM_TYPE;
+运行配置，FM历史，连接历史，音量等
+
+| .\output\AB1520S\Release_Flash\sector_mmi_customize_v_nvram2.obj |0 |0 |3 |0|
+8F9600     3 OBJECT   LOCAL  gMMI_Customize_v_nvram_init2
+保留给用户使用的其他配置
+
