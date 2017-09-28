@@ -173,24 +173,24 @@ robert说法是亚马逊用的算法资源太多，之前是2.5个a53。现在�
 3. amazon使用X2：芯片提供是DSPG（正在研发），算法使用了双核X2，频率是800MHz，对应的算法用ARM的CPU需要跑3~4GHz，还有额外的一个X2用于低功耗设计。
 4. 微纳感知评估的一个数据是ARM A9运行 1GHz的跑的算法，他们评估TL421 350MHz可以完成。他们的ADC外包用的是dophin的IP。
 5.
-* 耳朵IC
-** X2评估
-*** X2资料提到的WIFI性能
+** 耳朵IC
+*** X2评估
+**** X2资料提到的WIFI性能
 结合给的WIFI资料， 他们的WIFI的baseband（mac）部分需要的50MHz的性能。
 TCP/IP, EMAC RTOS的性能需求是15MHz
-*** 3503性能需求
+**** 3503性能需求
 + 场景
   播放边下载边播放网络320Kbps的mp3数据，此时主要的功能模块（解码，网络下载，usb读卡器，文件系统同时读写）
 + 实际数据
   CPU占有率 80%， 10532毫秒内，cache miss 的时间是 3950ms
   CPU运行156M，SPI Nor的速率为48MHz  四线模式， 每次cache miss需要的时间为3.3us (相当158个cycle，没有CRC的理论最快 140个cycle）
   折算出来的cpu的性能相当于82MHz， 320Kbps的mp3解码需要50MHz， 那么此时系统需要的就是32Mhz
-*** X2可以跑系统
+**** X2可以跑系统
 从指令集上看，开始支持char类型为8bit，因此对C程序的可移植性不会有大的影响了。
 从寄存器上看，开始有32个通用寄存器了，也比较容易跑控制逻辑代码了
 性能上看core mark按照资料有4.3/MHz，相比M4k更好的。
 目前给的评估环境，找不到如何使用timer和中断的方法，所以不太好测试，后续需要更多的资料和环境来测试。
-*** 各个平台CoreMark对比
+**** 各个平台CoreMark对比
 CoreMark对比如下：
 | IC         | Cpu/Clk        | Compile&argument                                            | Code       |   CoreMark | CoreMark/MHz |
 | Cordio-tc2 | Cortex-M0+ 32M | ARM Compiler 5.06 update 1 --cpu Cortex-M0+ -O3 -Otime      | RAM        |  64.513404 |        2.016 |
@@ -208,9 +208,9 @@ CoreMark对比如下：
 + 5202e的CoreMark偏低。
 + Ceva x2在simulator上运行的结果可能参考意义不大。
 
-*** 架构建议也评估下 单核 + spi nor 执行代码 + 内部Sram的方案
+**** 架构建议也评估下 单核 + spi nor 执行代码 + 内部Sram的方案
 主要考虑如下：
-**** spi nor性能可能好于sdr ram的性能
+***** spi nor性能可能好于sdr ram的性能
 + spi nor 和 sdr ram的基本性能可能只有不到2倍的差距
   sdr 用 166MHz  16bit
   spi nor 最快的已经有  80MHz DDR模式  8bit
@@ -239,21 +239,21 @@ CoreMark对比如下：
   指令预取，会最多预取4个fetch line， 每个fetch line是128bit
   cache miss是非阻塞的， ICACHE 和 DCACHE都可以发出多个outstanding的请求
   考虑这种特性的话， sdr ram的优势会进一步降低， 有可能比spi nor还慢
-**** 可以把性能要求较高的部分放到sram中来充分利用DSP的性能
+***** 可以把性能要求较高的部分放到sram中来充分利用DSP的性能
 相对于sd ram， 片内做一定量的sram， 在有特别的性能需求的时候， 可以跑程序和数据放在sram上跑，
 sram 的性能会显著的比sdr ram好很多
 
-** mail
+*** mail
 [[mu4e:msgid:DB7FD3E3699F5F46AC82EDB1899F131102791BFF@srv-mail-02.actions.com.cn][RE: 关于“耳朵”SOC IC的立项准备工作]]
 [[mu4e:msgid:DB7FD3E3699F5F46AC82EDB1899F131102791CCA@srv-mail-02.actions.com.cn][RE: CEVA X2评估]]
 [[mu4e:msgid:DB7FD3E3699F5F46AC82EDB1899F131102791D19@srv-mail-02.actions.com.cn][耳朵SOC的DSP选型评估]]
 [[mu4e:msgid:DB7FD3E3699F5F46AC82EDB1899F131102791D13@srv-mail-02.actions.com.cn][转发: TL420&TL421&X2的信息]]
 [[mu4e:msgid:2FF4B6792E0FC64E87AA66610E97F74906329E0E@srv-mail-02.actions.com.cn][X2 license]]
 [[mu4e:msgid:DB7FD3E3699F5F46AC82EDB1899F131102791CEC@srv-mail-02.actions.com.cn][FW: TL420&TL421&X2的信息]]
-** doc
-*** CEVA X2
-**** CEVA-X2 Block Diagram
-***** Program Control Unit
+*** doc
+**** CEVA X2
+***** CEVA-X2 Block Diagram
+****** Program Control Unit
 The Program Control Unit (PCU) is divided into three sub-units: the Dispatcher, the Interrupt handler, and the Program Sequencer.
 The Dispatcher aligns the instructions from the program memory and dispatches them to the different units. It includes an instruction queue and manages 16-bit and 32-bit instruction alignment.
 The interrupt handler handles incoming interrupts, and changes the program counter accordingly.
@@ -263,9 +263,9 @@ The Program Sequencer ensures proper program flow, whether sequential or non-seq
 • Branch Prediction Mechanism: Predicts the target address to minimize the penalty
 of branches and changes of flow
 • Exception Handling: Manages all software/hardware interrupts and resets acceptance
-***** Scalar Processing Unit
+****** Scalar Processing Unit
 The Scalar Processing Unit (SPU) handles all of the scalar computations and bit- manipulation operations, and provides efficient OOB C-compiler support for both control and DSP-oriented operations. The SPU consists of two separate computational sub-units named SPUx. The sub-units are independent and can execute instructions in parallel to other sub-units
-***** Load and Store Unit
+****** Load and Store Unit
 The Load and Store Unit (LSU) is responsible for all data memory accesses. The unit is divided into two sub-units, the LS0 and LS1, which are capable of loading and storing from/ to the data memory using various addressing modes.
 The LSU supports a load bandwidth of up to 128 bits per cycle and, in parallel, supports a store bandwidth of up to 128 bits per cycle
 The LSU generates two independent 32-bit addresses in each cycle, according to the following addressing modes:
@@ -273,7 +273,7 @@ The LSU generates two independent 32-bit addresses in each cycle, according to t
 • Indexed, using a base register and an immediate value or a pointer, including post-modification
 • Direct, fully embedded in the instruction (long direct)
 • Stack, using a Stack Pointer (SP) register for pushing and popping to/from the software stack
-**** Memory Subsystem
+***** Memory Subsystem
 The CEVA-X2 Memory Subsystem (MSS) is an extended system that can be easily adapted for full SoC integration. The MSS consists of the following:
 • Program Memory Subsystem (PMSS): Contains an optional L1 program memory and four-way cache
 • Data Memory Subsystem (DMSS): Contains L1 data memory and an optional cache
@@ -290,7 +290,7 @@ The CEVA-X2 supports 4 GB of data memory space and 4 GB of program memory space.
 Program memory access is always aligned as a single 128-bit line (fetch-line). The fetch-line is fetched only when it is required by the PCU. Because the Dispatcher in the PCU is responsible for aligning them, instructions within the program memory are not aligned.
 
 The CEVA-X2 DMSS uses Data DMA (DDMA) to transfer data between the local memory and an external memory, without interfering with core execution. In addition, the DMSS implements a special DMA Queue manager (QMAN) mechanism that enables the user to activate the DDMA without core intervention and without having to use real-time software.
-**** Register File
+***** Register File
 The CEVA-X2 contains a General Register File (GRF) that consists of 32 32-bit registers. The registers are referred to as r0 through 63
 
 The Predicate Register File (PRF) consists of the scalar predicate registers, which are used for scalar operations and load/store operations. Each predicate can be used as a multiple predicate for SIMD load/store and for SIMD operations to conditionally mask individual SIMD operations.
@@ -299,11 +299,11 @@ The CEVA-X2 includes 15 dual scalar predicate registers marked as prX.b(2). Each
 The Address Register File (ARF) consists of a stack pointer, modulo registers, and step registers
 
 The System Register File (SRF) consists of registers that control the program execution (for example, of the Program Counter (PC)) and return registers from subroutines and interrupts (retreg, retregi, and retregn). These registers are primarily used by the PCU.
-**** Scalar Processing Unit
+***** Scalar Processing Unit
 The Scalar Processing Unit (SPU) consists of two independent units named SPUx. The functional units perform independent operations in parallel, each according to the specific instruction within the instruction packet.
 Each SPU instruction within the instruction packet can be independently conditional, based on one of 15 predicate registers. For single instruction multiple data (SIMD) type instructions, each operation can be masked separately (for more details, see Section 4.4).
 The SPUs incorporate three execution stages. As a result, various instructions take a different number of cycles to execute. The number of stages an instruction requires for execution determines the cycle penalty before the result can be used by another instruction.
-**** Load and Store Unit
+***** Load and Store Unit
 The Load and Store Unit (LSU) does the following:
 • Generates the address for the data
 • Performs the data memory load and store operations
@@ -319,28 +319,28 @@ The LS0 and LS1 units are connected to a common General Register File (GRF). The
 
 The LSU includes three mode registers that control the behavior of the post-modification and address-generation mechanisms.
 All of the LSU instructions can be conditional using one of the predicate registers. The SPU contains dedicated instructions that can affect the predicate registers. In addition, dual short (S2) type load and store instructions can be predicated using the dual predicates to mask the load and store operations. This enables the LSU to load and store only part of the dual short according to the dual predicates.
-**** Memory Accesses
-***** Unaligned Memory Access
+***** Memory Accesses
+****** Unaligned Memory Access
 Unaligned data memory access is fully supported by the hardware without any core stall cycles. The ability to support aligned and unaligned accesses without penalty can have the advantage of fewer instructions, which leads to increased core performance and reduced code size.
-***** LSU Operations
+****** LSU Operations
 The LSU can manipulate the loaded and stored data types. In load operations, the LSU can read one data element from memory, change the element type, and then write it to the processor register. In store operations, the LSU can read the data element from the processor register, change the element type, and then store it to memory.
-***** Read-after-Write Sequence
+****** Read-after-Write Sequence
 The write buffer adds latency to the write transactions; however, it must be transparent to the core read transactions. An address-match mechanism enables stalling the core reading data that is not yet written to memory.
-**** Program Control Unit
-***** Introduction
+***** Program Control Unit
+****** Introduction
 The Program Control Unit (PCU) handles the program memory interface, the alignment of instruction packets from the program memory, the dispatching of instructions to the various functional units, and the execution flow of instruction packets in the core.
 Dedicated mechanisms in the PCU support both sequential and non-sequential instruction flows. The latter occurs due to branches and interrupts.
-***** Instruction Dispatcher
+****** Instruction Dispatcher
 The encoding scheme of the core is VLIW. This implies that an instruction packet is comprised of one or several instructions, where each instruction is associated with one of the core’s functional units. Each instruction occupies one slot in the instruction packet.
 The instruction dispatcher identifies the instructions that form the instruction packet, and then issues each instruction to the functional unit(s) with which it is associated.
-****** Alignment Unit
+******* Alignment Unit
 The Alignment unit identifies the instruction packet, and then loads it to the instruction register.
 The instruction packet opcodes that are fetched from the program memory are stored in a temporary buffer, called the instruction queue
 During sequential operations, the Alignment unit selects a group of 32 bits from the queue. The number of double-words (DWs) selected is determined by the fetch-line width, which is either four or eight DWs.
-****** Dispatch Unit
+******* Dispatch Unit
 The Dispatch unit issues all of the instructions that have to be executed in the current cycle (that is, the instruction packet) to the appropriate functional units. Immediate extension indications are also issued to the functional units by the Dispatch unit.
 The input to the Dispatch unit is the instruction register, which is loaded by the alignment unit.
-***** Program Sequencer
+****** Program Sequencer
 The Program Sequencer controls the fetching of instruction packets from the program memory, as well as all of the aspects of sequential and non-sequential instruction flows in the core.
 The following elements form the Program Sequencer:
 • Instruction Fetch Unit (IFU)
@@ -348,10 +348,10 @@ The following elements form the Program Sequencer:
 • Branch mechanism
 • Branch target buffer mechanism (BTB)
 • Interrupt handler
-****** Instruction Fetch Unit
+******* Instruction Fetch Unit
 During each instruction fetch, four or eight consecutive DWs (core-type dependent) are fetched from the program memory: the DW at the current address, and seven (three) additional DWs from the addresses that immediately follow. The set of fetched DWs is called a fetch-line and its width is 128/256 bits.
 The first address of the fetch-line must be a multiple of the fetch width. Instruction packet addresses can point to any word address within the fetch-line. Because the shortest instruction packet can be a word (two bytes), byte-address resolution is not needed for program memory addressing, which means that the LSB of the instruction packet address is always cleared.
-******* Sequential Fetch Mechanism
+******** Sequential Fetch Mechanism
 Sequential fetching of instruction packets is performed when the core executes a sequential block of instruction packets.
 During sequential operation, successive fetch-lines are read from memory. Each fetch-line contains one or more instruction packets.Because the number of instructions that are executed in parallel constantly varies, instruction packets are often fetched several cycles in advance (that is, ahead of the cycle during which they are needed).
 A set of four registers, called the queue, is implemented in the program sequencer. Each fetched line is loaded to one of the queue’s registers, which provides temporary storage for instruction packets that are fetched in advance of their execution. The width of the queue registers is identical to the width of the fetch-line
@@ -361,11 +361,11 @@ The sequential fetch mechanism ensures correct and continuous program flow, and 
 • The status of the queue (the number of valid words in the queue).
 • The number of words that the current instruction packet consumes.
 • The currently active fetches (because a fetch operation takes two cycles, the mechanism keeps track of fetches that were initiated in the two preceding cycles).
-******* Non-SequentialFetchMechanism
+******** Non-SequentialFetchMechanism
 A non-sequential instruction flow is an event in which the normal sequential flow of instruction packets is suspended, and an instruction packet from a different address is fetched. The non-sequential fetch mechanism generates all of the non-sequential addresses.
-****** Program Sequencer Register Access
+******* Program Sequencer Register Access
 The set of directly accessible Program Sequencer registers is referred to as the Sequencer Register File (SRF).
-****** Branch Mechanism
+******* Branch Mechanism
 The target address of a branch-type instruction can be specified in the following ways:
 • An absolute address encoded within the instruction opcode
 • A relative offset (relative to the address of the branch instruction), encoded within the instruction opcode
@@ -378,12 +378,12 @@ All of these instructions are multi-cycle. These instructions take several cycle
 To minimize the cycle penalty of these instructions, the following dedicated mechanisms are implemented in the PCU:
 • Delay slots
 • Branch prediction mechanisms: either using a Branch Target Buffer (BTB),
-******* Delay Slots in Branch Instructions
+******** Delay Slots in Branch Instructions
 The programmer can use up to four instruction packets in delay slots in most branch instructions.
 The instruction packets in the delay slots must be composed of single-cycle instructions that do not break the pipeline. In addition, instruction packets in delay slots are non-interruptible.
-******* Branch Target Buffer(BTB)
+******** Branch Target Buffer(BTB)
 he BTB mechanism calculates the target address based on the current address. Its operation is done before any information is extracted from the instruction packet, and is based solely on the current fetch address and the past behavior of this fetched address. The BTB size is configurable for 128 or 256 entries.
-******* Static Branch Prediction Support
+******** Static Branch Prediction Support
 If the taken/not-taken switch in the syntax is omitted, the default behavior for the branch instructions that are subjected to branch prediction is:
 • Not-taken when the instruction is predicated
 • Taken when no predicate is used
@@ -391,13 +391,13 @@ If the taken/not-taken switch in the syntax is omitted, the default behavior for
 Determining whether a certain branch is mostly taken or not-taken is generally not as straightforward as in this example. To efficiently determine the best prediction switch for every branch, a profiler utility can be run on the code, and the selection of the prediction switches can be based on these statistics.
 
 Correct prediction can reduce the cycle count of the branch by two cycles, and incorrect prediction can increase it by two cycles.
-******* Call and Return Instructions
+******** Call and Return Instructions
 During the execution of a call instruction, the return address is written to an internal register, which is called retreg (return register). When a return instruction is executed, the return address is taken from the retreg register.
-******* Target Instruction Packet Alignment
+******** Target Instruction Packet Alignment
 The target of a branch instruction can be located anywhere within a fetch-line, and instruction packets can cross fetch-line boundaries. If the instruction packet at the target of the branch crosses a fetch-line boundary, two lines must be fetched before execution of the instruction packet can begin.
 
 The additional single-cycle penalty can be avoided by aligning instruction packets to the fetch-line boundaries that are targets of branch instructions and originally cross a fetch-line boundary. This can be done by padding the instruction packet preceding the target instruction packet with parallel nop instructions,
-******* Exception Handling
+******** Exception Handling
 The core supports the following interrupts:
 • Six hardware maskable interrupts (INT0, INT1, INT2, INT3, INT4, and VINT)
 • Four software maskable interrupts (trap{t0}, trap{t1}, trap{t2}, and trap{t3})
@@ -405,46 +405,46 @@ The core supports the following interrupts:
 • One non-maskable software interrupt (trap)
 • One emulation software interrupt (trape)
 • Two hardware breakpoint interrupts (BI and PABP)
-******** Interrupt Latency and Non-Interruptible States
+********* Interrupt Latency and Non-Interruptible States
 Latency of the NMI, INT0, INT1, INT2, INT3, INT4, VINT and BI interrupts is two cycles, assuming that the core is in an interruptible state. The interrupt latency is calculated as the number of cycles between the assertion of the interrupt request and activation of the appropriate interrupt acknowledge signal.
 
 The penalty for the hardware interrupts (NMI, INT0, INT1, INT2, INT3, INT4, VINT, and BI) is five cycles, assuming that the processor is in an interruptible state. The interrupt penalty is calculated as the number of cycles in which the core does not execute any instructions.
-**** Pipeline
+***** Pipeline
 The following is a description of the common stages:
 • IF: Instruction Fetch, which is divided into two sub-stages: IF1 and IF2
 • D: Dispatch/Decode, which is divided into two sub-stages: D1 and D2
 • A: Address Generation, one stage
 • M: Memory Access, one stage
 • E: Scalar Execution, which is divided into four sub-stages: E1, E2, E3, and E4
-***** Instruction Fetch Stages
+****** Instruction Fetch Stages
 Instruction fetch execution operates over two stages, IF1 and IF2:
 • IF1: During this stage, the program address is issued by the PCU. The program address is decoded by the MSS and a memory read is initiated.
 • IF2: This stage is dedicated for program memory access. The fetch-line is registered in the instruction queue at the end of this stage. The size of the fetch-line is either 128 bits or 256 bits.
-***** Dispatch/Decode Stages
+****** Dispatch/Decode Stages
 Dispatch/decode execution operates over two stages, D1 and D2:
 • D1: The core selects a packet of 16, 32, 48, or 64 bits from the queue. This packet contains the instruction packet that is either the next instruction or a group of instructions that should be executed in parallel. At the end of this stage, the instruction packet register is loaded with the instruction packet.
 • D2: In this stage, each instruction within the instruction packet register is dispatched to the appropriate unit in the core.
-***** Address Generation Stages
+****** Address Generation Stages
 Address generation execution operates over two stages, A and M:
 • A: The core reads the relevant registers and performs address and modulo calculation and read/write strobe generation. The pointer’s post-modification value is calculated.
 • M: Address post-modification results are written to the register file and data memory is accessed. Registers are read from the register file into the SPUs.
-***** Scalar Execution Stages
+****** Scalar Execution Stages
 Scalar execution operates over four stages, E1, E2, E3, and E4:
 • E1: Single-stage scalar operations are executed.
 • E2: Dual-stage scalar operations (multiply) are completed.
 • E3: Accumulation is performed on MAC-type operations.
 • E4: Results are written to the register file.
-*** MSS
-**** overview
+**** MSS
+***** overview
 The CEVA-X1/CEVA-X2 MSS supports up to 4 GB of unified memory space for program memory (PMEM) and 4 GB for data memory (DMEM), and has up to four separate physical interfaces: up to three for data memory and one for program memory. This enables the core to simultaneously access both the program and data memories.
 The MSS provides the CEVA-X1/CEVA-X2 DSP core with simultaneous accesses to one instruction fetch stream and two data fetch streams. The Load Store Unit (LSU) is responsible for accessing the data memory, and the Program Control Unit (PCU) is responsible for accessing the program memory.
 The CEVA-X1/CEVA-X2 MSS can access two different types of memories: internal memories, also referred to as local memories (on-chip), and external memories (which might be located on-chip and/or off-chip). While the core accesses the internal memories with no wait-states, accessing the external memories might require several wait-states.
 The CEVA-X1/CEVA-X2 MSS contains standard interfaces for connecting the core to external devices and/or peripherals. These interfaces include up to four AXI master ports (program and data), up to four AXI slave ports, and an APB3 port. All of the ports are fully compliant with the Advanced Microcontroller Bus Architecture (AMBA). The MSS also contains JTAG and APB3 interfaces for debug support.
-**** Program Memory Subsystem
+***** Program Memory Subsystem
 The PMSS supports highly predictable execution times as well as less predictable execution times. Software designers can have complete control over the location of the instructions within the PMSS; for example, time-critical code can run from either the local memory or from a locked cache-line, while less-time-critical code can run either from the cache or from the external memory directly. This enables them to benefit from both the highly predictable execution provided by a local memory, as well as the flexible software development capabilities provided by a cache.
 
 The PMSS is connected to an external memory controller via an AMBA4 interface. The cache consists of a memory set that holds the actual cached line data, as well as a tag memory, which is used to determine whether an address is cached and whether the instruction is valid. Tightly Coupled Memory (TCM) is also supported and is accessed with zero wait-states
-***** Feature List
+****** Feature List
 The PMSS supports the following main features:
 ● 4 GB program memory linear space
 ● Configurable TCM memory size
@@ -455,14 +455,14 @@ The PMSS supports the following main features:
 ● MP_PORT_WIDTH bit-wide AXI master port
 ● Optional ECC; one error correction and two error detections on all RAM and cache blocks
 ● Non-blocking cache and fetch-line access
-***** Program Memory Controller
+****** Program Memory Controller
 The Program Memory Controller (PMC) is responsible for controlling access to the TCM, the cache, and the external memory from the core.
 For core access, the PMC receives a program address and a read indication. The address is only applied to the set and tag memories if the address falls outside of the TCM boundary.
 When no TCM address is accessed, the program fetch-line is either served to the core queue with zero latency (for a cache hit), or fetched from the external memory (for a cache miss or non-cacheable region).
 In any core access to a non-TCM address space, the PMC checks the cacheable attribute of the corresponding IACU region. When the address is mapped to a cacheable region, the tag data of each way is compared with the requested address, and the result (combined with the valid state) is used to determine a hit/miss. When the address is mapped to a non-cacheable region, the PMC sends the request to the EPP.
-***** Internal Program Memory
+****** Internal Program Memory
 The internal program memory contains the program fetch-lines that are read whenever a fetch-line is requested by the core. The PMSS consists of a TCM and an instruction cache. Both the TCM and the instruction cache (on a hit) are accessed with zero wait-states.
-***** L1 Instruction Cache
+****** L1 Instruction Cache
 ● Optional four-way set-associative cache
 ● Zero-cycle stall on a hit
 ● Hardware-configurable size
@@ -470,23 +470,23 @@ The internal program memory contains the program fetch-lines that are read whene
 ● Hardware pre-fetch
 ● Miss pipeline support
 ● Non-blocking read support
-****** Handling Cache Misses
-******* Read Misses
+******* Handling Cache Misses
+******** Read Misses
 L1IC read misses initiated by the core (as well as pre-fetches) are handled by requesting a cache-line fill from the external memory. A cache-line fill is requested from the EPP, and then the returned cache-line is written to the way specified by the L1IC replacement algorithm (the victim way).
 If the request was initiated by the core and each cache-line contains two core fetch-lines, the requested fetch-line is requested first using a WRAP transaction from the AXI and served to the core directly and to the cache.
 If the request was to abort, the cache-line request is aborted if the AXI transaction was not yet initiated, or it is written only to the cache if it was already sent to the AXI.
-******* Non-Blocking Read Miss
+******** Non-Blocking Read Miss
 To serve the core with the requested data as soon as it is available, the cache- line fills requests from the EPP using a WRAP burst request, where the core-requested fetch-line arrives first and is served to the core, while the rest of the cache-lines arrive on the following beats into the cache without interfering with the core. When the cache-line request was initiated by a software operation, the cache-line fill still uses a WRAP burst request that is started from the beginning of the cache-line.
-******* Program Direct Memory Access
+******** Program Direct Memory Access
 The Program Memory Controller includes a direct memory access unit (PDMA) that performs downloads from the external memory to internal program memory.
-***** External Program Port
+****** External Program Port
 The external memory is accessed in the following cases:
 ● A cache miss occurs. The PMC requests a cache-line (using a four-beat WRAP burst) from the external port.
 ● The core requests an instruction from an address that is outside of the TCM range, and the requested address is to a non-cacheable region (or the cache is disabled) using a two-beat WRAP burst.
 ● The PDMA download reads from external memory and writes to the internal memory.
 ● When the OCEM accesses the EPP for a read or write, the OCEM uses a one-beat burst for write accesses and a two-beat burst for read accesses.
-**** Data Memory Subsystem
-****** Overview
+***** Data Memory Subsystem
+******* Overview
 The Data Memory Subsystem (DMSS) provides data from either the local memory or the external memory to the CEVA-X1/CEVA-X2 core.
 The DMSS is both hardware- and software-configurable, which enables hardware and software designers to have complete control over its structure, functionality, and performance. End users have control over the availability of different components (such as the number of AMBA ports and the size of the local RAMs).
 The DMSS supports highly predictable execution times by placing data in the local memory. Software designers can have complete control over the location of the data within the DMSS; for example, time-critical data can run from the local memory, while less-time-critical data can run from the external memory.
@@ -498,13 +498,13 @@ The CEVA-X1/CEVA-X2 core can issue a load and store operation simultaneously:
 ● The L (load) unit connects to the DMSS using an LD_WIDTH-bit read bus.
 ● The S (store) unit connects to the DMSS using an ST_WIDTH-bit write bus.
 The SPU accesses the data memory without any alignment restriction.
-****** feature list
-******* Non-Blocking Write Support
+******* feature list
+******** Non-Blocking Write Support
 The L1 cache supports non-blocking writes. This means that, after a write miss, the core is not stopped and the cache-line fill process is continued in parallel with the core normal operation.
-******* Non-Blocking Read Support
+******** Non-Blocking Read Support
 The L1 cache supports non-blocking reads. This means that, after a read miss, the cache-line fill request starts from the core-requested address (using a WRAP request) and will serve it to the core.
 This prevents the core from halting while the rest of the data is written to the cache-line. The cache-line fill process is continued in parallel with the core’s normal operation.
-****** Internal Data Memory
+******* Internal Data Memory
 Because multiple sources can access the IDM simultaneously, it is divided into either two or four blocks to reduce the possibility of conflicts between the various accesses. Two or four blocks are selected during IP installation. If a block and/or bank conflict occurs, a wait cycle is inserted to the non-granted source(s).
 The IDM can be configured as follows:
 ● 512 KB, 256 KB, 128 KB or 64 KB memory size configuration.
@@ -512,7 +512,7 @@ The IDM can be configured as follows:
 ● Total block memory width is 2 x LD_WIDTH bits.
 ● Each block is composed of N= LD_WIDTH/16 memory banks. The addresses are interleaved over the banks within each block, in the same row boundaries.
 ● Each bank is 32 bits wide (4-byte write enabled).
-****** Data Write Buffer
+******* Data Write Buffer
 The CEVA-X1/CEVA-X2 core issues the address and controls (that is, read/write and size) in the M stage of the pipeline. The data in write transactions is available in the E3 stage, three cycles later. An address delay mechanism is implemented to ensure the proper functionality of the memory during write transactions.
 An address delay is used to synchronize the data with its respective address. When ready, the address (along with the data and transaction attributes) is pushed into one of the queue buffers that administer the pending write transactions. The WB queue reduces core wait cycles that can occur as a result of memory bank conflicts.
 The WB unit is divided into the following functional blocks:
@@ -521,7 +521,7 @@ The WB unit is divided into the following functional blocks:
 ● LS read-after-write and strong ordering (RAW/SO) match blocks
 
 The WB queue has two entries, each containing a single element that is comprised of a 32-bit address, ST_WIDTH-bit data, and attributes. The queue has one input port and two output ports (WBA, WBB). All writes to an IDM memory bank, as well as all writes to the external memory, are written in the order they occur in the core, but later IDM writes can be written before earlier writes to the external memory if the external port is not available.
-****** L1 Data Cache
+******* L1 Data Cache
 The L1 Data Cache (L1DC) is responsible for servicing data accesses from the core for L1DC-cacheable data. The main L1DC features are:
 ● Optional two/four-way set-associative cache
 ● Zero-cycle stall for way hit
@@ -533,98 +533,98 @@ The L1 Data Cache (L1DC) is responsible for servicing data accesses from the cor
 ● Miss pipelining support
 ● Non-blocking read and write support
 ● Cross tags unaligned support
-******* Non-Blocking Cache
+******** Non-Blocking Cache
 L1DC read and write accesses are non-blocking cache accesses, which means that the core is only stopped when the MSS cannot accept data from the core or cannot provide the core with the requested data. It is not stopped when the L1DC is busy with internal operations (for example, cache-line fill or software operations).
-****** Queue and Buffer Managers
+******* Queue and Buffer Managers
 The CEVA-X1/CEVA-X2 data memory subsystem (DMSS) implements a special DMA manager (DMAN) that enables users to activate the DDMA without using real-time software.
 The DMAN is composed of two main components:
 ● Queue Manager (QMAN): Manages queues of DMA tasks by selecting the next task to be executed by the DDMA.
 For more details, see Section 3.14.1.
 ● Buffer Manager (BMAN): Implements FIFO-based memory management by sending source and/or destination buffer status indications to the QMAN.
-**** Memory Subsystem Programming Model
+***** Memory Subsystem Programming Model
 
-*** Tensilica
+**** Tensilica
 [[mu4e:msgid:DB7FD3E3699F5F46AC82EDB1899F131102791ED1@srv-mail-02.actions.com.cn][转发:Tensilica DSP的资料]]
-*** 3605D
-**** 开发
+**** 3605D
+***** 开发
 [[mu4e:msgid:DC4E6E803E914F4B8AFE57F1456019F1035B7155@srv-mail-02.actions.com.cn][答复: GS700E 拉一个开发分支同步LS370A(GL5202E)]]
-**** 规格
+***** 规格
 [[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201A902BF@srv-mail-02.actions.com.cn][LS360F MRD]]
 [[mu4e:msgid:2FF4B6792E0FC64E87AA66610E97F749063297F5@srv-mail-02.actions.com.cn][转发: 发送电子邮件: US282A ASET工具调音说明_V2.2_20170331.pdf, ASET在线调试工具usb通信协议.doc]]
 
-**** 火百灵
+***** 火百灵
 [[mu4e:msgid:DB7FD3E3699F5F46AC82EDB1899F1311027918C2@srv-mail-02.actions.com.cn][火百灵方案的规格]]
-***** TODO [[mu4e:msgid:5EBFE11104EFEA4981C19EC8D2C2946B0514426C@srv-mail-02.actions.com.cn][火百灵&PVo的KT案子深圳会议]]
-***** TODO [[mu4e:msgid:DB7FD3E3699F5F46AC82EDB1899F131102791BE3@srv-mail-02.actions.com.cn][RE: ATS3605 EVB对接CX20810的驱动调试]]
-***** TODO [[mu4e:msgid:tencent_15169A6E2DED8EBA56372239@qq.com][回复：答复: 回复：答复:  ATS3605软件需求总结]]
+****** TODO [[mu4e:msgid:5EBFE11104EFEA4981C19EC8D2C2946B0514426C@srv-mail-02.actions.com.cn][火百灵&PVo的KT案子深圳会议]]
+****** TODO [[mu4e:msgid:DB7FD3E3699F5F46AC82EDB1899F131102791BE3@srv-mail-02.actions.com.cn][RE: ATS3605 EVB对接CX20810的驱动调试]]
+****** TODO [[mu4e:msgid:tencent_15169A6E2DED8EBA56372239@qq.com][回复：答复: 回复：答复:  ATS3605软件需求总结]]
 [[mu4e:msgid:DB7FD3E3699F5F46AC82EDB1899F131102791B13@srv-mail-02.actions.com.cn][转发: 火百灵方案的规格]]
 [[mu4e:msgid:DB7FD3E3699F5F46AC82EDB1899F131102791B12@srv-mail-02.actions.com.cn][转发: AP6356S datasheet_V1.1_03182015(1).pdf]]
 
-**** alsalib
+***** alsalib
 [[mu4e:msgid:DC4E6E803E914F4B8AFE57F1456019F10353B84F@srv-mail-02.actions.com.cn][alsalib使用文档]]
-**** TODO 64M 内存确认
-**** 架构评估
+***** TODO 64M 内存确认
+***** 架构评估
 [[mu4e:msgid:5EBFE11104EFEA4981C19EC8D2C2946B0453C3EB@srv-mail-02.actions.com.cn][LS3605D_方案架构评估报告]]
-**** 播放器
+***** 播放器
 https://en.wikipedia.org/wiki/Media_player_(software)
-***** VLC
+****** VLC
 https://en.wikipedia.org/wiki/VLC_media_player
 https://wiki.videolan.org/LibVLC
 https://wiki.videolan.org/VLC_media_player/
-***** MPlayer
+****** MPlayer
 https://en.wikipedia.org/wiki/MPlayer
-****** MPlayer can play many formats, including:[9]
+******* MPlayer can play many formats, including:[9]
 Physical media: CDs, DVDs, Video CDs, Blu-ray discs
 Container formats: 3GP, AVI, ASF, FLV, Matroska, MOV (QuickTime), MP4, NUT, Ogg, OGM, RealMedia, Bink
-****** Video formats:
+******* Video formats:
 Cinepak, DV, H.263, H.264/MPEG-4 AVC, HuffYUV, Indeo, MJPEG, MPEG-1, MPEG-2, MPEG-4 Part 2, RealVideo, Sorenson, Theora, WMV, Bink
-****** Audio formats:
+******* Audio formats:
 AAC, AC3, ALAC, AMR, DTS, FLAC, Intel Music Coder, Monkey's Audio, MP3, Musepack, RealAudio, Shorten, Speex, Vorbis, WMA, Bink
-****** Subtitle formats:
+******* Subtitle formats:
 AQTitle, ASS/SSA, CC, JACOsub, MicroDVD, MPsub, OGM, PJS, RT, Sami, SRT, SubViewer, VOBsub, VPlayer
-****** Image formats:
+******* Image formats:
 BMP, JPEG, MNG, PCX, PTX, TGA, TIFF, SGI, Sun Raster
-****** Protocols:
+******* Protocols:
 RTP, RTSP, HTTP, FTP, MMS, Netstream (mpst://), SMB, ffmpeg:// (Uses FFmpeg's protocol implementations)
-****** output driver
+******* output driver
 MPlayer can also use a variety of output driver protocols to display video,
 including VDPAU, the X video extension, OpenGL, DirectX, Direct3D, Quartz Compositor, VESA, Framebuffer, SDL and rarer ones such as ASCII art (using AAlib and libcaca) and Blinkenlights. It can also be used to display TV from a TV card using the device tv://channel, or play and capture radio channels via radio://channel|frequency.
-****** Interface and graphical front-ends
+******* Interface and graphical front-ends
 Gnome-MPlayer v1.0.9 on GNOME with the "Adwaita" Dark theme
 Like GStreamer, MPlayer is a command-line application and there are a couple of front-ends available, which use GUI widgets of GTK+, Qt or some other widget library. When not using these front-ends, mplayer can still display video in a window (with no visible controls on it), and is controlled using a keyboard.
 GTK+-based are gmplayer (official[10][11]) and Gnome-MPlayer
 Qt-based are SMPlayer and KMPlayer, among others.
 Cocoa-based are MPlayer OS X Extended and MPlayerX[12]
-***** GStreamer
+****** GStreamer
 https://en.wikipedia.org/wiki/GStreamer
-****** Video acceleration
+******* Video acceleration
 Through special plugins provided by Texas Instruments, GStreamer makes use of hardware acceleration provided by e.g. Texas Instruments DaVinci.
 There are various SIP blocks that can do the computations to decode certain video codecs, such as PureVideo, UVD, QuickSync Video, TI Ducati and more. Such needs to be supported by the device driver, which in turn provides one or multiple interfaces, like VDPAU, VAAPI, Distributed Codec Engine or DXVA to end-user software like MPlayer to access this hardware and offload computation to it.
 
 It is possible to use Video Coding Engine with GStreamer through the OpenMAX IL wrapper plugin gst-omx.[17] This is for example possible on the Raspberry Pi.[18]
 The SIP core present on some Texas Instruments SoCs is also accessible through GStreamer: gst-dmai, gst-openmax, gst-dsp.[19]
 VDPAU and VAAPI are supported with GNOME Videos >= 2.28.0 and GStreamer >= 0.10.26 since 2010[20]
-******* VDPAU
+******** VDPAU
 Video Decode and Presentation API for Unix (VDPAU) is a royalty-free application programming interface (API) as well as its implementation as free and open-source library (libvdpau) distributed under the MIT License.[1]
 
 The VDPAU interface is to be implemented by device drivers, such as Nvidia GeForce driver, nouveau, amdgpu, to offer end-user software, such as VLC media player or GStreamer, a standardized access to available video decompression acceleration hardware in the form of application-specific integrated circuit blocks on graphics processing units (GPU), such as Nvidia PureVideo or Unified Video Decoder and make use of it.
-******* VAAPI
+******** VAAPI
 Video Acceleration API (VA API) is a royalty-free API as well as its implementation as free and open-source library (libVA) distributed under the MIT License.
 
 The VA API interface is to be implemented by device drivers to offer end-user software, such as VLC media player or GStreamer, access to available video acceleration hardware, such as PureVideo (through the libva-vdpau driver, which implements VA API in terms of VDPAU) or Unified Video Decoder.
 
 The API enables and provides access to hardware-accelerated video processing, using hardware such as graphics processing units (GPU) to accelerate video encoding and decoding by offloading processing from the central processing unit (CPU).
-****** Media formats
+******* Media formats
 The Good, Bad and Ugly GStreamer plugins mentioned earlier provide, alongside processing elements/filters of all kinds, support for a wide variety of file formats, protocols and multimedia codecs.
 
 In addition to those, support for more than a hundred compression formats (including MPEG-1, MPEG-2, MPEG-4, H.261, H.263, H.264, RealVideo, MP3, WMV, FLV, etc.[22][23]) is transparently provided through the GStreamer FFmpeg/libav plug-in. See the Libav and FFmpeg pages for a complete list of media formats provided by these plug-ins.
 
-***** OpenMAX
+****** OpenMAX
 https://en.wikipedia.org/wiki/OpenMAX#Integration_layer
-****** OpenMAX AL
+******* OpenMAX AL
 https://www.khronos.org/openmax/al/
-******* profile
-******** DATA ACCESS
+******** profile
+********* DATA ACCESS
 Playback of audio and video files Y
 Rendering of image sources Y
 Recording and storage of audio and video sources Y
@@ -635,14 +635,14 @@ Identify data sources by name, such as URL/URI, or by file handle Y
 Respect DRM Y
 Select an input source from among a multitude of available inputs Y
 Select an output destination from among a multitude of available outputs
-******** DEVICE CAMERA
+********* DEVICE CAMERA
 Camera flash activation Y
 Camera Effects Y
 Exposure settings (exposure time, aperture and ISO sensitivity) Y
 Focus control (including macro-focus on/off) Y
 White balance control Y
 Optical and digital zoom
-******** PLAYBACK, RECORDING AND PROCESSING CONTROLS
+********* PLAYBACK, RECORDING AND PROCESSING CONTROLS
 “VCR-type” playback modes: play, pause, stop, rewind, fast-forward Y
 Play multiple sounds at a given time Y
 Playback of raw PCM audio Y
@@ -662,43 +662,43 @@ Audio recording from another software component Y
 Record audio to a non-PCM format Y
 Recording modes: record and stop Y
 Query the estimated size of the output image based on current image settings
-******** PER-APPLICATION SETTINGS
+********* PER-APPLICATION SETTINGS
 Use key-value pairs to query and set both the codec and non-codec configurations of the underlying media engine
-******** PER-OBJECT SETTINGS
+********* PER-OBJECT SETTINGS
 Set video encoder properties: frame rate, bitrate (constant/variable), size, resolution, duration limit and codec format
 Set audio encoder properties: bitrate (constant/variable), channel count, duration limit, sampling frequency, codec format, size, and resolution
 Set image encoder properties: codec format, size and resolution
 Set and query image/video encoder special effects, if supported. Effects include, but are
 not limited to, “monochrome”, “sepia”, “emboss”, “paintbrush”, “solarize”, “red-eye Y reduction”, “cartoon” and “negative”
-******** METADATA
+********* METADATA
 Extract metadata from media files and embedded media streams
 Insert/edit metadata in recorded media content
-******** EVENT AND ERROR NOTIFICATIONS
+********* EVENT AND ERROR NOTIFICATIONS
 Callbacks for periodic media positioning (such as for progress bar) Y
 Callback alerts when playback is in a prescribed position (such as for looping) Y
 Callbacks for error conditions
-******** CAPABILITY QUERIES
+********* CAPABILITY QUERIES
 Enumerate and query the capabilities of available input sources
 Enumerate and query the capabilities of available output destinations
 Query the API version number
 Query capabilities of the OpenMAX AL implementation
-******** MISCELLANEOUS
+********* MISCELLANEOUS
 Query the degree to which an OpenMAX AL implementation is based on OpenMAX IL: none, partial or full
 Extensibility
 Minimum 16-bit PCM audio output
-******** To create an object process:
+********* To create an object process:
 • Create and realize an engine object if one has not been created already.
 • Obtain the XAEngineItf interface from this object.
 • Call the appropriate object creation method of this interface.
 • If the call succeeds, the method will return an XAObjectItf interface of the new object.
 • After working with the object, call the Destroy() method of the XAObjectItf to free the object and
 its resources.
-******** The Relationship Between Objects and Interfaces
+********* The Relationship Between Objects and Interfaces
 The set of interfaces exposed by an object is determined by three factors:
 • The object’s type
 • The interfaces requested by the application during the object’s creation
 • The interfaces added and removed by the application during the object’s lifetime
-******* Object Overview
+******** Object Overview
 OpenMAX AL represents entities in its architecture as objects, including:
 • Engine Object
 • Media Objects
@@ -708,65 +708,65 @@ OpenMAX AL represents entities in its architecture as objects, including:
 • LED Array Objects
 • Radio Objects
 • Vibration Control Objects
-******** Engine Object
+********* Engine Object
 The engine object is the entry point to the OpenMAX AL API. This object enables you to create all the other objects used in OpenMAX AL.
 The engine object is special in the sense that it is created using a global function, xaCreateEngine
 The engine object represents the system’s various multimedia-related devices via unique device IDs. It supports the enumeration of audio input, audio output, camera, radio, LED and vibrator devices as well as mechanisms to query their capabilities.
-******** Media Objects
+********* Media Objects
 A media object implements a multimedia use case by performing some media processing task given a prescribed set of inputs and outputs. Media objects include (but are not limited to) objects that present and capture media streams, often referred to as players and recorders, respectively. They operate on audio, video, and image data or some combination of them.
 The following characteristics define a media object:
 • The operation it performs, denoted by the creation method used to instantiate the media object.
 • The inputs it draws data from, denoted as its data sources and specified at media object creation.
 • The outputs it sends data to, denoted as its data sinks and specified at media object creation.
-******** Metadata Extractor Object
+********* Metadata Extractor Object
 Player objects support reading of the metadata of the media content and recorder objects support writing metadata. However, sometimes it is useful just to be able to read metadata without having to be able to playback the media.
 Metadata Extractor object can be used for reading metadata without allocating resources for media playback.
-******** Audio Output Mix Object
+********* Audio Output Mix Object
 The API allows for routing of audio to multiple audio outputs and includes an audio output mix object that facilitates this functionality. The application retrieves an output mix object from the engine and may specify that output mix as the sink for a media object.
-******** Camera Object
+********* Camera Object
 Control of one of the device’s cameras is handled via the Camera object. The number of cameras supported by a device and their capabilities can be retrieved from the media engine via the XACameraCapabilitiesItf interface. A camera I/O device exposes the XACameraItf interface, which is used to control camera features such as flash, focusing, metering, exposure compensation, sensitivity, shutter speed, aperture, white balance, and zoom. The camera I/O object is connected to a media recorder media object to capture still images or video.
-******** Display Regions
+********* Display Regions
 Conceptually OpenMAX AL maintains three separate notions relating to the visual output:
 • Display: Corresponds to the entire logical screen area (or “desktop”). The display is provided by the native windowing manager in the form of a native handle. All interaction with this entity is handled exclusively via native interfaces using the native handle (not via OpenMAX AL). Multiple media objects may operate on the same display.
 • Window: Corresponds to the window within the display. A window may be sized to encompass the entire display and yet it is considered an independent entity (for instance, a fullsize window may be later sized down to a region less than the entire display or have other windows on top of or behind it). The window is provided by the native windowing manager in the form of a native handle. All interaction with this entity is handled exclusively via native interfaces using the native handle (not via the OpenMAX AL). Multiple media objects may operate on the same window.
 • Region: Corresponds to the area within the native window where the media object presents its output. This may include the entire window area or be some subset of the window area. The region is specific to a particular media objec
-******* OpenMAX AL Use Cases
+******** OpenMAX AL Use Cases
 ------------
-******** Audio and Video Playback
+********* Audio and Video Playback
 ------------------
 [[./pic/屏幕快照 2017-05-26 下午11.33.12.png]]
 
-****** Implementations
+******* Implementations
 Android 4.0 and later exposes OpenMAX AL as part of its NDK (Native Development Kit).[15]
 LIM OpenMAX is an open source implementation of OpenMAX AL and OpenMAX IL for Linux
 Bellagio is an open source OpenMAX IL implementation for Linux maintained by STMicroelectronics.[16]
 Tizonia is an open source OpenMAX IL implementation for Linux[17]
 GStreamer (GST) is an open source multimedia framework used by several application, and it can use OpenMAX IL modules with its "gst-omx" module.[18]
 C-only, optimized for NEON (Cortex A8) and SIMD (for ARM11 cores using ARMv6 architecture) optimized OpenMAX DL libraries are available at [1][19]
-******* Bellagio
+******** Bellagio
 http://omxil.sourceforge.net
 
-****** Comparison with OpenSL ES
+******* Comparison with OpenSL ES
 OpenSL ES (Open Sound Library for Embedded Systems) is another Khronos Group API that also provides an audio library for the same target market as OpenMAX AL. OpenSL ES and OpenMAX AL share the same common architecture and have a few common features:
 
 Audio playback and recording
 Basic MIDI playback
 Metadata extraction
 
-**** qq物联
+***** qq物联
 [[mu4e:msgid:2FF4B6792E0FC64E87AA66610E97F74906260A58@srv-mail-02.actions.com.cn][答复: 关于QQ物联SDK依赖库]]
-**** cx20810
+***** cx20810
 [[mu4e:msgid:DB7FD3E3699F5F46AC82EDB1899F131102791AB8@srv-mail-02.actions.com.cn][ATS3605 EVB对接CX20810的驱动调试]]
-**** open WRT
+***** open WRT
 [[mu4e:msgid:5EBFE11104EFEA4981C19EC8D2C2946B0453C400@srv-mail-02.actions.com.cn][openwrt_sqlite]]
-***** share lib 空间优化
+****** share lib 空间优化
 https://stackoverflow.com/questions/31354641/c-reduce-library-size-by-excluding-unnecessary-functions-programmatically
 https://stackoverflow.com/questions/8021470/how-to-optimize-size-of-shared-library
 
-****** elf
+******* elf
 https://docs.oracle.com/cd/E19683-01/817-3677/6mj8mbtc9/index.html#chapter6-73709
 
-*** as216B
+**** as216B
 [[mu4e:msgid:DB7FD3E3699F5F46AC82EDB1899F1311027918A8@srv-mail-02.actions.com.cn][AS216B项目开发进展]]
 AS216B项目的代码已经上传到svn代码服务器：
 http://srv-fw:8080/SVN2/AS216B/trunk/AS216B
@@ -1041,6 +1041,9 @@ http://baike.baidu.com/link?url=oeOvRCGBYVeUhnlbtFwp6r1NmPy7nikE7Ihx7WKX4CfGUeVM
 X509
 http://baike.baidu.com/item/x509?sefr=cr
 IOT
+*** 识别
+https://azure.microsoft.com/zh-cn/services/cognitive-services/speaker-recognition/
+
 ** huawei
 *** liteos
 【链接】HuaweiLiteOS快速入门
@@ -10248,6 +10251,14 @@ redirected_tty_write
                             spin_unlock_irqrestore(&port->lock, flags);`
 
 * 研发会议
+** 0927 WIFI性能资源需求
+*** reaktek IOT WIFI
+Heap运行内存
+Wifi sta模式，驱动初始化完成，没做任何操作时heap内存使用
+| 任务stack占用             | 25832 |
+| Wifi分配的动态内存        | 29770 |
+| 小于100byte的分配占用内存 |  7406 |
+
 ** 0905 方案研发三部会议报告
 *** 标案项目相关
 **** 3703
@@ -15011,6 +15022,35 @@ ssid="ACTZH-PAD-FW2"   psk="Actspa@2016"
 张东风	ftp_zhangdf	ftp123456
 
 * 出差报告
+
+** 0921 RT-thread
+见了linaro的周新华，和RT-thread的人
++ zephyr
+  目前中兴已经在使用zephyr了， rda也有开始支持zephyr。
+  zephyr的mips代码的upstream可以由我们自己来做，linaro已经和zephyr组织打过招呼
+  linaro在zephyr项目本身的工作还是集中在arm架构的支持上，以及dts等工作上，而不是组件这些工作。linaro的工作最终都会提交到zephyr项目中，在linaro的lite工作组可以看到一些还在内部没有提交到zephyr中的代码。
++ kernel版本
+  linaro的lsk(linara stable kernel)目前最新的是4.9，会维护较长时间，目前linaro和google的合作已经开始比较紧密， linaro的kernel会逐渐的被google直接接纳， 这样使用linaro kernel适配android的话， 会更加容易一些。
+  google对kernel版本的升级周期之前大概是2年左右，后续版本大概是4年左右。
++ android版本升级
+  linaro目前有提供andriod版本升级的服务，要付费的，
++ rt thread
+  获得了华强聚丰和思必驰的1000W融资， 据说出过故事机，有70~80k的出货
+  rt-thread是一个类似zephyr的一个软件系统，除了提供核心外，还提供了文件系统，设备驱动模型等， 而不是像FreeRTOS一样只有一个核心。
+  rt-thread采用的license协议类似LGPL， 修改了kernel本身的代码需要开源，自己的代码不需要开源。商用不需要付费。
+  IDE支持keil iar以及gcc， 调试支持jlink，比较方便开发
+  rt-thread 3.0 整合了较多的组件， 网络是lwip， 没有蓝牙相关的协议栈，目前还未开源出来，网上的开源版本还比较旧
+  支持多种架构，mips主要是君正的cpu
+  芯片的os适配，以及driver porting需要原厂去做，
+  号称支持中天的cpu， 问了后，说只有fpga，没有实际的ic
++ 96board客户ucrobotics
+  正在做rda5991来支持rt-thread
+  使用了s900用来做ai，和图像相关的计算密集型算法，评价是s900目前可以用到4个neon和16个gpu的运算核心，性能比3288要好不少。
+  19层的dnn网络可以在250ms内跑完。
+  目前在规划使用GT7或S700做低成本的板子。
+
+
+
 ** 2017-0405
 *** linaro 96board
 96boards 的软件支持：
