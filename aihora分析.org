@@ -3,7 +3,6 @@
 #+OPTIONS: \n:t ^:nil  toc:nil
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELED(c)
 * 内存布局
-
 | START     | END       | USED      | MEMORY              |
 | 009607H | 00EFFFH |   3584 | EDATA               |
 | 00F000H | 00FFDFH |   3690 | EDATA_HIEDATA       |
@@ -29,6 +28,8 @@
 | 8F9600H | 8F9FFFH |      3 | MMI_C_V_NVRAM2      |
 | 8FA000H | 8FAFFFH | 503 | HCONST_MMI_V_NVRAM  |
 | 8FA600H | 8FAFFFH | 3 | MMI_C_V_NVRAM       |
+
+
 ** 模块划分
 | module name | code size | data size | rodata size |
 | COMMON      |      3924 |       226 |         842 |
@@ -428,9 +429,6 @@ MMI_DRV_KeyEventHandler根据keycode来调用不同的按键处理函数， 具�
            gMMI_ctl.driverCtl.keyDownState = MMI_GetTopStateByLink(gMMI_ctl.serviceInd);
          MMI_DRV_KeyHandler(U8 keyEventCode)
            MMI_DRV_KeyEventHandler(gMMI_ctl.serviceInd, keyEventCode);
-
-
-   MMI_
 *** DRV_KeyEventHandler
      case SYSTEM_KEY_EVENT:
        MMI_DRV_ProcessKeyEvent(linkIndex, index);
@@ -447,11 +445,6 @@ MMI_DRV_KeyEventHandler根据keycode来调用不同的按键处理函数， 具�
        MMI_FM_ProcessKeyEvent(linkIndex, index);
      case LINE_IN_KEY_EVENT:
        MMI_LineIn_ProcessKeyEvent(linkIndex, index);
-
-
-
-
-
 
 ** 任务间通讯
 在不同任务间，以及在不用的功能模块间，使用消息队里的方式进行通信， 比如如下序列：
@@ -471,13 +464,11 @@ MMI_DRV_KeyEventHandler根据keycode来调用不同的按键处理函数， 具�
 
 系统中使用的消息队列如下：
     //- Input Queue of Kerner Task
-    OSMQ OSMQ_HCI_ACL_Data_To_Host[NUM_OF_SUPPORTED_ACL_LINK];      /* PDU to Host */
+    OSMQ OSMQ_HCI_ACL_Data_To_Host[NUM_OF_SUPPORTED_ACL_LINK];    
     OSMQ OSMQ_HCI_Event_To_Host;
     OSMQ OSMQ_HCI_Event_To_Xport;
-
     //- Input Queue of HC Task
     OSMQ OSMQ_HCI_Command_From_Host;
-
     OSMQ OSMQ_HCI_Command_To_LC[NUM_OF_SUPPORTED_ACL_LINK];
     //- Input Queue of LM/LL Task
     OSMQ OSMQ_HCI_Command_Relay_To_LM[NUM_OF_SUPPORTED_ACL_LINK];
@@ -568,9 +559,7 @@ MMI_DRV_KeyEventHandler根据keycode来调用不同的按键处理函数， 具�
 } ALIGN_OSMQ_STRU;
 
 ** DSP
-
 语音提示，语音命令，解码等都是通过dsp来完成的， mcu和dsp之间是通过一个mailbox来进行交互的。
-
 *** DSP的配置信息
 DSP的功能参数配置， 音箱的定义在 "..\DSP\AB1520S_DSP\DSP_PARA_AB1520S_MUSICBOX_TARGET.txt"文件中，主要包含如下内容：
 4路AEC的配置 AEC/NR/AVC， 接收和发送的噪声消除   VAD的配置， 双mic的配置，接收和发送的音效设置，还有一些PLC， PEQ等配置，以及不太看明白的其他配置。
@@ -695,7 +684,6 @@ VC_DATA_DEFINE	(CANCEL)
 	};
 
 ** A2DP profile的例子
-
 A2DP的profile
 static AVDTP_PROFILE_DESC CODE gA2DP_ProfileDesc = {
 	{ // MMI_PROFILE_DESC
@@ -722,6 +710,8 @@ static AVDTP_PROFILE_DESC CODE gA2DP_ProfileDesc = {
          A2DP_SignalCommandHandler(linkIndex, eventPtr);
      A2DP_CheckTimer(linkIndex);
 
+* SDK编译可配置
+使用
 
 * Flash上的配置信息
 ** 配置信息的定义
@@ -785,12 +775,38 @@ SECTOR_AFE_INIT_STRU CODE gSector_AfeInit =
 + 内存堆管理使用多个预先配置的pool的方式，有如下好处
   提供了相对通用的内存分配的函数接口， 提高了内存使用率并避免由于内存碎片。
   880DDA    22 OBJECT   LOCAL  gSector_SysMemoryConfig
-  /* CallArrayEntries */          16,
-  /* CallArrayEntrySize */        4,
-  /* TimerArrayEntries */         50,
-  /* TimerArrayEntrySize */       4,
-  /* OSMEM1ArrayEnties */         40,
-  /* OSMEM1ArrayEntrySize */      50,
+/* CallArrayEntries */          16,
+/* CallArrayEntrySize */        4,
+/* TimerArrayEntries */         50,
+/* TimerArrayEntrySize */       4,
+/* OSMEM1ArrayEnties */         40,
+/* OSMEM1ArrayEntrySize */      50,
+#if defined TWS_SETTINGS || defined FAST_CONNECT_DONGLE
+/* OSMEM2SmallTxEntries */      9,
+#else
+/* OSMEM2SmallTxEntries */      6,
+#endif
+#if defined TWS_SETTINGS || defined FAST_CONNECT_DONGLE
+/* OSMEM2SmallTxEntrySize */    702,
+#else
+/* OSMEM2SmallTxEntrySize */    390,
+#endif
+/* OSMEM2TinyRxEntries */       3,
+/* OSMEM2TinyRxEntrySize */     62,
+#if defined TWS_SETTINGS || defined FAST_CONNECT_DONGLE
+/* OSMEM2SmallRxEntries */      3,
+#else
+/* OSMEM2SmallRxEntries */      6,
+#endif
+#if 0//SUPPORT_AAC_SNK
+/* OSMEM2SmallRxEntrySize */    1100,	//For AAC of Lenovo K3 NOTE
+#else
+/* OSMEM2SmallRxEntrySize */    702,	
+#endif
+/* OSMEM2LargeRxEntries */      2,
+/* OSMEM2LargeRxEntrySize */    1100,
+/* UartDmaRxBufSize */          380,
+
 
 + 尽量使用了const  data来减少data数据的使用
   比如L2CAP中一些常见的命令和请求
@@ -798,7 +814,7 @@ SECTOR_AFE_INIT_STRU CODE gSector_AfeInit =
   84B033    12 OBJECT   LOCAL  signalling_connection_request
   84B03F    16 OBJECT   LOCAL  signalling_connection_response
   84B04F    16 OBJECT   LOCAL  signalling_config_req_with_MTU
-                        
+
 * 附录
 ** Flash上详细的配置数据
 *** 配置总的入口
@@ -1196,32 +1212,4 @@ typedef struct
 | .\output\AB1520S\Release_Flash\sector_mmi_customize_v_nvram2.obj |0 |0 |3 |0|
 8F9600     3 OBJECT   LOCAL  gMMI_Customize_v_nvram_init2
 保留给用户使用的其他配置
-* 其他
-
-
-MMI_DRV_VoiceCommand_ResultProcessed(keyEventCode);
-
-   DRIVER
-     DRIVER_ProcMmiCmd();
-       DriverMMICmdHandler[MMI_TO_DRIVER_TOTAL_CMD] =
-       DRIVER_StopVoiceCommandHandler, //DRIVER_STOP_VOICE_COMMAND_CMD
-         msgPtr = OSMQ_Get(OSMQ_AUDIO_Prompt_Command_ptr);
-           VoiceCommand_Pause
-             OSMEM_Get(OSMEM_ptr1)
-             Mailbox_TaskOgfVC(msgPtr, OGF_VC, OCF_VC_STOP);
-             DRIVER_SendCmdToMailBox(msgPtr);
-
-MMI_DRV_VoiceCommandEnd_Event
-
-   MMI_DRV_KeyEventHandler
-     index = keyEventMap[keyCode].index;
-     MMI_HFP_ProcessKeyEvent(linkIndex, index);
-     MMI_HFP_KeyEvtHandler[HFP_KEY_EVENT_NO] =
-     {MMI_HFP_KeyAcceptCall}, 	//HFP_KEY_EVENT_KEY_ACPCALL,
-       MMI_HFP_KeyAcceptCall
-         MMI_HFP_StopIncomingVPRing
-           MMI_DRV_SendStopVoiceCommandCmd
-             msgPtr = MMI_GetMMIMsgTypeCmdMemory(DRIVER_STOP_VOICE_COMMAND_CMD);
-             OSMQ_Put(OSMQ_DRIVER_Command_ptr, (U8 XDATA_PTR)msgPtr);
-
 
