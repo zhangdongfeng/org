@@ -1,8 +1,8 @@
 #+LATEX_HEADER: \usepackage{xeCJK}
 #+LATEX_HEADER: \setCJKmainfont{STKaiti}
-#+OPTIONS: \n:t ^:nil  
+#+OPTIONS: \n:t ^:nil  f:nil
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELED(c)
-* 内存布局
+* 存储器布局
 | START     | END       | USED      | MEMORY              |
 | 009607H | 00EFFFH |   3584 | EDATA               |
 | 00F000H | 00FFDFH |   3690 | EDATA_HIEDATA       |
@@ -48,6 +48,7 @@
   固化了1M的nor， 总共用了551,663字节， 其中代码289,118， DSP的代码是168，354，剩下的注释配置数据， 其中语音提示音配置数据54,893，包含了中英文， 一种语言的话大概27K
 + ROM部分
   从FE8000开始的96k是rom，大部分（75K左右）是蓝牙的链路控制（LC），主机控制（HC），以及链路控制切换（LCS），剩下的一些其他代码，主要是kernel，设备驱动，以及SDK的一些运行环境的代码。
+* 主要模块
 ** 模块划分
 主要模块的资源开销如下：
 | module name | code size | data size | rodata size |
@@ -75,6 +76,7 @@
 *** sector
 存放在norflash上的配置数据，各个模块的配置数据，包括：soc的寄存器，rf参数，设备驱动，蓝牙相关协议，语音提示音等。
 其中dsp的配置中有看到支持两个mic， 4路AEC，以及语音命令。
+
 | file name                                                                  | rodata size |
 | .\output\AB1520S\Release_Flash\sector_config0_header.obj                   |          48 |
 | .\output\AB1520S\Release_Flash\sector_config1_header.obj                   |         219 |
@@ -127,8 +129,10 @@
 | .\output\AB1520S\Release_Flash\sector_mmi_customize_v_nvram.obj            |           3 |
 | .\output\AB1520S\Release_Flash\sector_mmi_le_variation_nvram_type.obj      |           0 |
 | .\output\AB1520S\Release_Flash\sector_mmi_le_variation_nvram_type2.obj     |           0 |
-| .\output\AB1520S\Release_Flash\sector_mp_parameter_F.obj                   |           0 |
+| .\output\AB1520S\Release_Flash\sector_mp_parameter_F.obj                   |           0 | 
+  
 *** COMMON模块
+
 | .\source\COMMON\flash_descriptor.obj |0 |0 |64 |0|
 802000    64 OBJECT   LOCAL  _FlashDescriptor
 应该是nor flash的分区划分。
@@ -387,7 +391,8 @@ HC  Kernel  LM都是不开源的，
 链路层协议处理，包含LMP， AFH，加密key，配对，sniff模式，连接建立(acl sco esco)，电源管理等功能。
 *** DRIVER
 处理MMI层发送给驱动的消息并调用相应驱动， 处理FM ，timer等驱动时间。
-         DRIVER
+#+BEGIN_SRC C
+DRIVER
          DRIVER_ProcMmiCmd();
          DRIVER_FM_Handler();
          DRIVER_Key_Polling();
@@ -401,10 +406,11 @@ HC  Kernel  LM都是不开源的，
          LED_CheckTimer();
          DRIVER_TEMP_Check();
          DemoSound_Polling();
-
+#+END_SRC
 *** MMI
 
 MMI是蓝牙产品中的应用逻辑层，处理蓝牙协议相关需要用户处理的事件，除了蓝牙协议相关处理外，还有其他的使用驱动的适配层。
+#+BEGIN_SRC C
    MMI
      GAP
      L2CAP();
@@ -425,6 +431,7 @@ MMI是蓝牙产品中的应用逻辑层，处理蓝牙协议相关需要用户�
      OLED_CheckTimer();
      MMI_LineIn_EncodedDataHandler();
      GAP_TestCaseGeneration();
+#+END_SRC
 
 *** Kernel
 OS本身任务入口，应该是处理系统相关的一些事件的。
@@ -434,7 +441,9 @@ OS本身任务入口，应该是处理系统相关的一些事件的。
 按键处理是在DRIVER这个任务中进行按键查询，在DRIVER_Key_Polling获取按键的扫描码并做好去抖，长按处理。MMI_DRV_KeyParser会根据当前活跃的蓝牙服务，把扫描码映射成统一的keycode。
 
 MMI_DRV_KeyEventHandler根据keycode来调用不同的按键处理函数， 具体流程如下：
-*** DRIVER
+
+#+BEGIN_SRC C
+DRIVER
      DRIVER_Key_Polling(void)
        KeypadScanKeyDebounce(&gDriver_Key_Ctl.currKeyBitmap))
        DRIVER_Key_SendEvent(scanInd, KEY_UP);
@@ -444,7 +453,8 @@ MMI_DRV_KeyEventHandler根据keycode来调用不同的按键处理函数， 具�
            gMMI_ctl.driverCtl.keyDownState = MMI_GetTopStateByLink(gMMI_ctl.serviceInd);
          MMI_DRV_KeyHandler(U8 keyEventCode)
            MMI_DRV_KeyEventHandler(gMMI_ctl.serviceInd, keyEventCode);
-*** DRV_KeyEventHandler
+
+DRV_KeyEventHandler
      case SYSTEM_KEY_EVENT:
        MMI_DRV_ProcessKeyEvent(linkIndex, index);
                MMI_DRV_KeyVoiceUp
@@ -460,12 +470,14 @@ MMI_DRV_KeyEventHandler根据keycode来调用不同的按键处理函数， 具�
        MMI_FM_ProcessKeyEvent(linkIndex, index);
      case LINE_IN_KEY_EVENT:
        MMI_LineIn_ProcessKeyEvent(linkIndex, index);
+#+END_SRC
 
 ** 任务间通讯
 在不同任务间，以及在不用的功能模块间，使用消息队里的方式进行通信， 比如如下序列：
 + GAP运行在MMI任务中，通过OSMQ_GAP_Event_To_MMI_ptr队列发送消息给MMI，
 + MMI在MMI_HCI_Handler获取消息，处理完成后通过MMI_HCI_SendCmd发送到OSMQ_HCIDRV_Command_From_GAP_ptr消息队列中，后者是通过总线发送给HC模块
 
+#+BEGIN_SRC C
    MMI_HCI_Handler();
        OSMQ_Get (OSMQ_GAP_Event_To_MMI_ptr)) != (MMIMsgType XDATA_PTR)NULL)
        switch (msgPtr->eventCode)
@@ -476,8 +488,10 @@ MMI_DRV_KeyEventHandler根据keycode来调用不同的按键处理函数， 具�
          msgPtr->msgOpcode = HCI_CMD_ACCEPT_CONNECTION_REQUEST;
          MMI_HCI_SendCmd(msgPtr);
            OSMQ_Put (OSMQ_HCIDRV_Command_From_GAP_ptr, (U8 XDATA_PTR)msgPtr);
+#+END_SRC
 
 系统中使用的消息队列如下：
+#+BEGIN_SRC C
     //- Input Queue of Kerner Task
     OSMQ OSMQ_HCI_ACL_Data_To_Host[NUM_OF_SUPPORTED_ACL_LINK];
     OSMQ OSMQ_HCI_Event_To_Host;
@@ -572,6 +586,7 @@ MMI_DRV_KeyEventHandler根据keycode来调用不同的按键处理函数， 具�
     OSMQ OSMQ_LM_Free_Link;
     OSMQ OSMQ_LM_Used_Link;
 } ALIGN_OSMQ_STRU;
+#+END_SRC
 
 ** DSP
 语音提示，语音命令，解码等都是通过dsp来完成的， mcu和dsp之间是通过一个mailbox来进行交互的。
@@ -585,6 +600,7 @@ DSP的功能参数配置， 音箱的定义在 "..\DSP\AB1520S_DSP\DSP_PARA_AB15
 每一个数据结构都有 rw_word来表明当前控制权在mcu还是dsp， 当rw_word为MCU_Owned的时候，mcu才能操作对应的数据结构，mcu操作完数据结构后，把rw_word设置为DSP_Owned，然后通过设置一个特殊寄存器（FBOFFS_WO_DSP_INT_CTL）启动DSP
 
 具体数据结构如下:
+#+BEGIN_SRC C
 typedef struct                //two mailbox structure include M2D & D2M
 {
         M2D_CTL_STRU m2d_ctl;
@@ -613,7 +629,7 @@ VFUN CODE Mailbox_EVENTCB_Handler[] =
         RT_END_EvtHandler,
     VC_END_EvtHandler
 };
-
+#+END_SRC
 *** 语音命令的实现流程
 sdk中是支持语音命令的，接打电话，语音拨号，以及配对等看到的如下：
 VC_DATA_DEFINE	(PAIRING)
@@ -640,7 +656,8 @@ VC_DATA_DEFINE	(CANCEL)
 + 按键事件处理中，完成对应的蓝牙协议的控制动作
 
   具体代码流程如下：
-***** VoiceCommand_Start
+#+BEGIN_SRC C
+VoiceCommand_Start
   DRIVER_SendCmdToMailBox
     MailBox_CmdHandler
        while(gAlignDSP.Mailbox.m2d_ctl.rw_word == DSP_Owned){}
@@ -651,7 +668,7 @@ VC_DATA_DEFINE	(CANCEL)
            gAlignDSP.Mailbox.m2d_ctl.rw_word = DSP_Owned;
            HC_SFR_WRITE_BY_FB (FBOFFS_WO_DSP_INT_CTL,0x8);
 
-***** MailBox_EvtHandler
+MailBox_EvtHandler
    Mailbox_EVENTCB_Handler[gAlignDSP.Mailbox.d2m_ctl.evt_word.Evt-EVT_CODE] ();
    VC_END_EvtHandler
        gVC_ctl.result = gAlignDSP.Mailbox.d2m_ctl.evt_word.para.vc_evt_para.vc_result;
@@ -659,7 +676,7 @@ VC_DATA_DEFINE	(CANCEL)
          DRIVER_ProcMailboxEvent((U8 XDATA_PTR)EVT_PTR);
            OSMQ_Put(&Driver_MailBox_Evt, (U8 XDATA_PTR)msgPtr);
 
-***** DRIVER
+DRIVER
    DRIVER_MailBoxHandler();
      Driver_MailBoxOgfVCEvtHandle, //OGF_VC,
        DRIVER_SetGainAndMute(TARGET_NONE);
@@ -674,6 +691,7 @@ VC_DATA_DEFINE	(CANCEL)
                  MMI_DRV_LookUpKeyMapTable((VoiceCommand_GetActionTable
                  MMI_DRV_VoiceCommand_ResultProcessed(keyEventCode);
                     MMI_DRV_KeyEventHandler(gMMI_ctl.serviceInd, (U8)keyEventCode);
+#+END_SRC
 * profile开发
 在ab1520S中，底层的核心协议是不开源的， A2DP和AVRCP等和应用层配合比较紧密的协议是开源的。
 
@@ -684,7 +702,7 @@ VC_DATA_DEFINE	(CANCEL)
 最后通过MMI_RegisterProfile把上层profile注册到profile管理系统中。这样通用的profile对应的链接建立，和断开等l2cap所需要的功能就可以被蓝牙协议栈管理了。
 
 当一个profile的链接建立以后，其对应的PROFILE_TASK_FUNC就会在MMI任务中被调用
-
+#+BEGIN_SRC C
         struct stMmiProfileDesc
         {
                 U8 profileId;
@@ -694,9 +712,10 @@ VC_DATA_DEFINE	(CANCEL)
                 PROFILE_LINK_EVENT			ProfileLinkEvent;
                 PROFILE_DATA_EVENT			ProfileDataEvent;
         };
-
+#+END_SRC
 ** A2DP profile的例子
 A2DP的profile
+#+BEGIN_SRC C
 static AVDTP_PROFILE_DESC CODE gA2DP_ProfileDesc = {
         { // MMI_PROFILE_DESC
                 PROFILE_A2DP,
@@ -710,20 +729,22 @@ static AVDTP_PROFILE_DESC CODE gA2DP_ProfileDesc = {
         A2DP_Media_DataEvent,	//MediaDataEvent
 };
 
-*** A2DP_Init
+A2DP_Init
      _InitMediaCodec();
      SDAP_RegisterServiceRecord(&gA2DP_SinkServiceNode);
      MMI_RegisterProfile(&gA2DP_ProfileNode);
 
-*** A2DP
+A2DP
      A2DP_SignalHandler(linkIndex);
        eventPtr = OSMQ_Get(&a2dpLinkInfo->OSMQ_AVDTP_Signal_To_A2DP);
        case AVDTP_COMMAND_MSG:
          A2DP_SignalCommandHandler(linkIndex, eventPtr);
      A2DP_CheckTimer(linkIndex);
 
+#+END_SRC
 * SDK编译可配置
 sdk中不同的功能，profile可以使用编译宏的方式来配置， 主要在bt_config_profile.h中， 比如音箱的相关配置如下：
+#+BEGIN_SRC C
 #ifdef STEREO_SOC
         #define DSP_ENABLE
         #define AUDIO_BIST
@@ -759,6 +780,7 @@ sdk中不同的功能，profile可以使用编译宏的方式来配置， 主要
                         #define MMI_LE_ENABLE_ADV
                 #define SUPPORT_STATIC_RANDOM_ADDRESS
         #endif
+#+END_SRC
 * Flash上的配置信息
 ** 配置信息的定义
 配置信息的结构都是类似的方式：
@@ -772,6 +794,7 @@ sdk中不同的功能，profile可以使用编译宏的方式来配置， 主要
 | 802100H   | 8022FFH   | 0001D4H   | HCONST_CFGHEAD      |
 
 在文件后面会定义放到该段中的数据，通过c文件包含头文件的方式定义：
+#+BEGIN_SRC C
 SECTOR_CFG0_HEADER_STRU CODE gSectorConfig0Header =
 {
     NUM_OF_SECTOR_CFG0,
@@ -783,7 +806,7 @@ SECTOR_CFG0_HEADER_STRU CODE gSectorConfig0Header =
         //- CRC
         {0x2E,0xFE}
 };
-
+#+END_SRC
 在包含的sector_config0_member.h中有如下定义
 SECTORS_ENUM_MACRO(SECTOR_AFE_INIT, &gSector_AfeInit, sizeof(AFE_INIT_STRU), CRC_CHK)
 表示：
@@ -792,7 +815,7 @@ SECTOR_AFE_INIT(802100H) 是gSector_AfeInit指定的ic内部寄存器的值
 gSector_AfeInit则定义在AB1520S_SVN72747_Headset_OBJ/source/SECTOR/Config0/sector_afe_init.c中，具体如下， 在同一目录下，定义了gSector_SfrInit gSector_RfMiscCtl gSector_HwMiscCtl。
 
 如下为gSector_AfeInit的定义片段， 每一项是三个byte， 第一个byte是寄存器地址，2，3是寄存器的值。c251是16bit的寄存器
-
+#+BEGIN_SRC C
 #elif (defined OPERATION_IN_RF_AB1520S)
 SECTOR_AFE_INIT_STRU CODE gSector_AfeInit =
 {
@@ -806,7 +829,7 @@ SECTOR_AFE_INIT_STRU CODE gSector_AfeInit =
                         {0x02, 0xDD, 0x2F},
                         {0x03, 0x55, 0x01},
                         {0x04, 0x21, 0x45},  //{0x04, 0x21, 0x65},  CML workaround for LO spur !!!
-
+#+END_SRC
 * 总结
 ** 基本情况
 + 内存部分
@@ -828,10 +851,10 @@ SECTOR_AFE_INIT_STRU CODE gSector_AfeInit =
   固化了1M的nor， 总共用了551,663字节， 其中代码289,118， DSP的代码是168，354，剩下的注释配置数据， 其中语音提示音配置数据54,893，包含了中英文， 一种语言的话大概27K
 + ROM部分
   从FE8000开始的96k是rom，大部分（75K左右）是蓝牙的链路控制（LC），主机控制（HC），以及链路控制切换（LCS），剩下的一些其他代码，主要是kernel，设备驱动，以及SDK的一些运行环境的代码。
- + DSP
-   语音提示，语音命令，解码等都是通过dsp来完成的， mcu和dsp之间是通过一个mailbox来进行交互的。
-   从DSP的配置文件中可以看到4路AEC的配置 AEC/NR/AVC， 接收和发送的噪声消除   VAD的配置， 双mic的配置，接收和发送的音效设置，还有一些PLC， PEQ等配置，以及不太看明白的其他配置。
-   在SDK中有语音命令的配置数据以及处理流程。
++ DSP
+  语音提示，语音命令，解码等都是通过dsp来完成的， mcu和dsp之间是通过一个mailbox来进行交互的。
+  从DSP的配置文件中可以看到4路AEC的配置 AEC/NR/AVC， 接收和发送的噪声消除   VAD的配置， 双mic的配置，接收和发送的音效设置，还有一些PLC， PEQ等配置，以及不太看明白的其他配置。
+  在SDK中有语音命令的配置数据以及处理流程。
 ** 优点
 + 编译可配置
   可以做到大部分产品类型的可配置， 在一个sdk中，可以配置出耳机，音箱，soundbar等多种产品形态，tws，ble以及各个蓝牙profile都可以单独配置
@@ -864,7 +887,7 @@ SECTOR_AFE_INIT_STRU CODE gSector_AfeInit =
 这个是总的flash descpritor信息， boot代码读取这个扇区的内容，来填充FLASH_DESCRIPTOR_STRU的结构。
 
 在FLASH_DESCRIPTOR_STRU;定义了各类配信息的头部
-
+#+BEGIN_SRC C
 typedef struct stru_flash_descriptor
 {
     VOID (*fFlashInitEntry)(VOID);
@@ -885,7 +908,7 @@ typedef struct stru_flash_descriptor
     U16 OtaUpgrateVersion;
     CRC16 CRC;
 } FLASH_DESCRIPTOR_STRU;
-
+#+END_SRC
 *** 配置头部
 配置头部是放在如下的存储段中的
 | 802100H   | 8022FFH   | 0001D4H   | HCONST_CFGHEAD      |
@@ -991,6 +1014,7 @@ MMI相关驱动的参数的非零的初始化值。
 | .\output\AB1520S\Release_Flash\sector_mmi_nvram_type.obj |0 |0 |1,356 |0|
 8807C5  1356 OBJECT   LOCAL  gMMI_nvram_init
 MMI相关的配置，如下
+#+BEGIN_SRC C
         typedef struct
         {
                 PinCodeCtl pinCodeCtl;
@@ -1067,7 +1091,7 @@ MMI相关的配置，如下
                 U8 reserved9;
                 U8 reserved10;
         } MMI_NVRAM_TYPE;
-
+#+END_SRC
 | .\output\AB1520S\Release_Flash\sector_mmi_nvram_keymap.obj |0 |0 |437 |0|
 880610    15 OBJECT   LOCAL  gMMI_nvram_keymap_init
 按键映射表配置， 长按等等
@@ -1097,6 +1121,7 @@ GAP的蓝牙地址配置
 | .\output\AB1520S\Release_Flash\sector_mp_parameter.obj |0 |0 |366 |0|
 801000   366 OBJECT   LOCAL  gSector_MpParameter
 量产参数配置， bt qualification， 私钥等
+#+BEGIN_SRC C
         MP_SYS_LOCAL_DEVICE_INFO_STRU   MP_SysLocalDeviceInfo;
         MP_AFE_INIT_STRU		MP_AfeInit;
         MP_SFR_INIT_STRU        MP_SfrInit;
@@ -1106,7 +1131,7 @@ GAP的蓝牙地址配置
         MP_ADC_FIELD_STRU       MP_AdcField;
         U8 CalibrationInfo[NUM_OF_CALIBRATION_INFO];
         U8 ManufacturingInfo[NUM_OF_MANUFACTURING_INFO];
-
+#+END_SRC
 | .\output\AB1520S\Release_Flash\sector_sys_patch_code_init.obj |0 |0 |136 |0|
 881B3E   136 OBJECT   LOCAL  gSector_SeysPatchCodeInit
 EXTERN SECTOR_MP_PARAMETER_F_STRU CODE gSector_MpParameter_F;
@@ -1114,6 +1139,7 @@ EXTERN SECTOR_MP_PARAMETER_F_STRU CODE gSector_MpParameter_F;
 | .\output\AB1520S\Release_Flash\sector_mp_parameter_F.obj |0 |0 |0 |0|
 80116E     0 OBJECT   LOCAL  gSector_MpParameter_F
 保留给用户区的参数配置
+#+BEGIN_SRC C
 typedef struct stru_mp_parameter_f
 {
         U8 rsvd;
@@ -1125,7 +1151,7 @@ typedef struct stru_mp_parameter_f
         LE_BD_ADDR_TYPE leBDAddr;           //LE BD address
         #endif
 } MP_PARAMETER_F_STRU;
-
+#+END_SRC
 **** gSectorVoiceDataHeader
 | .\output\AB1520S\Release_Flash\voice_prompt_ctl.obj | 0 | 0 | 741 | 0 |
 890000    52 OBJECT   LOCAL  gVoiceLangCtl
@@ -1182,6 +1208,7 @@ data是很小的语音单元， 比如“电话”  “取消”是两条单独�
 **** gSectorDspDataHeader
 | .\output\AB1520S\Release_Flash\sector_dsp_func_para.obj |0 |0 |4,094 |0|
 8F6000  4094 OBJECT   LOCAL  gSector_DspFuncParameter
+#+BEGIN_SRC C
 typedef struct
 {
         DSP_FUNC_PARA_STRU      dsp_param_parameter;
@@ -1197,11 +1224,13 @@ typedef struct
     VOICE_RELATION        voice_parameter;
 
 } DSP_FUNC_PARA_CTL_STRU;
+#+END_SRC
 DSP的功能参数配置， 音箱的定义在 "..\DSP\AB1520S_DSP\DSP_PARA_AB1520S_MUSICBOX_TARGET.txt"文件中，主要包含如下内容：
 4路AEC的配置 AEC/NR/AVC， 接收和发送的噪声消除   VAD的配置， 双mic的配置，接收和发送的音效设置，还有一些PLC， PEQ等配置，以及不太看明白的其他配置。
 
 | .\output\AB1520S\Release_Flash\sector_dsp_hpf_param_type.obj |0 |0 |543 |0|
 8F7000   543 OBJECT   LOCAL  gSector_DspHpfParameter
+#+BEGIN_SRC C
 typedef struct stru_dsp_hpf_param
 {
         U8							hpf_enable;
@@ -1218,12 +1247,14 @@ typedef struct stru_dsp_peq_param
         U8							num_of_linein_peq_config;
         PEQ_CONFIG_SECTOR			a2dp_peq_config_sector[NUM_OF_MAX_PEQ_CONFIG];
         PEQ_CONFIG_SECTOR			linein_peq_config_sector[NUM_OF_MAX_PEQ_CONFIG];
+#+END_SRC
 
 | .\source\SECTOR\sector_dsp_vp_nb.obj |0 |0 |8,706 |0|
 881BC6  8706 OBJECT   LOCAL  gSector_DspVpNb
 **** gSectorRuntimeHeader_1
 | .\output\AB1520S\Release_Flash\sector_mmi_driver_variation_nvram_type.obj |0 |0 |503 |0|
 8FA000   503 OBJECT   LOCAL  gMMI_Driver_v_nvram_init
+#+BEGIN_SRC C
 typedef struct
 {
         MMI_LINK_KEY_TYPE link_key_info[NVRAM_LINK_KEY_ITEMS];
@@ -1233,6 +1264,7 @@ typedef struct
         U8 auth_requirments;
 
 } MMI_DRIVER_VARIATION_NVRAM_TYPE;
+#+END_SRC
 运行时的参数，用来做设备管理，存储不同设备的linkkey
 
 | .\output\AB1520S\Release_Flash\sector_mmi_customize_v_nvram.obj |0 |0 |3 |0|
@@ -1241,6 +1273,7 @@ typedef struct
 **** gSectorRuntimeHeader_2
 | .\output\AB1520S\Release_Flash\sector_mmi_driver_variation_nvram_type2.obj |0 |0 |503 |0|
 8F9000   503 OBJECT   LOCAL  gMMI_Driver_v_nvram_init2
+#+BEGIN_SRC C
 typedef struct
 {
         U8 CheckValid;
@@ -1249,9 +1282,10 @@ typedef struct
         LinkHistoryType fast_dongle_link_history_info;
         LinkHistoryType link_history_info[NVRAM_LINK_KEY_ITEMS];
 } MMI_DRIVER_VARIATION_NVRAM_TYPE;
+#+END_SRC
 运行配置，FM历史，连接历史，音量等
 
 | .\output\AB1520S\Release_Flash\sector_mmi_customize_v_nvram2.obj |0 |0 |3 |0|
 8F9600     3 OBJECT   LOCAL  gMMI_Customize_v_nvram_init2
 保留给用户使用的其他配置
-     
+
