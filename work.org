@@ -10251,14 +10251,1720 @@ redirected_tty_write
                             spin_unlock_irqrestore(&port->lock, flags);`
 
 * 研发会议
+** 1010 合肥反馈问题
+*** Linux的内存管理
+linux的内存是比较复杂和轻巧的，要考虑的问题很多，我们在3503中和us282f中使用的方式，都可以从linux的解决方案中找到影子，以目前在项目中使用的linux 3.10的内存为例（linux最新的内存管理系统还没看过），简单描述下linux的内存管理系统，再讨论其他RTOS的内存管理系统
+**** 物理内存管理
++ 4k内存页
+  linux最基本的内存管理是按照内存页来管理的， 把全部物理内存按照4k大小（可配置，一般都是4k）来划分出来。
++ 伙伴算法
+  多个4K内存页的分配使用的内存分配方式是伙伴算法（buddy）。
+  整个4k的连续空间，在Linux中会被划分为多个连续的块（比如8M）， 使用buddy算法的时候，比如要分配一个1M大小的连续空间， 会先把8M拆分成2个4M， 把其中一个4M拆分成2个2M， 再把其中的一个2M拆分成两个1M， 然后拿其中的一个1M满足分配。 每一个这样的拆分出来的两块就成为一对伙伴。
+  在释放这个1M的块时， 如果对应的伙伴是空闲的， 那么就会合并成一个更大的块， 更大的块的伙伴如果是空闲的， 那么会继续合并下去。
+  伙伴系统的好处就是相对没那么容易碎片化。缺点是可能会有内存浪费。
++ 内存分配
+  + 应用层
+    应用不同进程都自己的页表，因此按照物理内存单页分配的方式，通过进程的页表映射成连续虚拟空间就可以了。应用内存的分配只需要分配单个的4k页就能满足要求了
+    同时，分配给应用的物理内存，内核随时都可以通过修改进程页表的方式来收回（代码段只读内存）或者移动（数据等读写内存）。而这个行为完全对应用程序透明。
+  + 内核和驱动程序
+    linux是一个巨内核的系统，内核本身和驱动程序都是在同一个地址空间内，因此分配的数据物理内存不能移动。代码部分也不能缺页，都是常驻在内存中的。
+    在需要的内存小于4k的时候，任意单个4k页就可以满足， 但如果需要的内存大于4k， 则必须分配物理上连续的内存页，这个就必须要在整个内存空间中整理出来连续的段才可以满足内存分配
+
+    主要的问题就是内存片问题，在系统运行较长的时候，很难整理出连续的物理内存页。在7029平板方案中，有遇到过问题，1G内存，usb传输申请一个连续的32kbyte的buffer都申请不出来。
+
+    碎片问题的避免在linux中有几个办法：
+    + 提前申请，占住不放
+      避免重复分配和释放。 但有些问题不适合这样解决。同时也会稍微的降低一下内存利用率
+    + 使用vmalloc
+      分配的时候仍然分配物理不连续的内存，为分配的内存创建新的内存页表来映射成连续内存
+      但这种方法只能用在只被cpu访问的内存上，不能被dma访问，另外一方面，32bit内核的这个内存映射区域是比较少的
+    + CMA的方式
+      以性能为代价，解决在内核中分配连续物理内存的方式
+***** 内存碎片的缓解和解决
+****** 内存碎片的缓解
+linux在CMA之前已经做了一些防止内存碎片化的动作， 主要如下：
++ 划分成多个迁移类型(MIGRATE_TYPES)来适配不同的分配需求
+    把内存区域划分成多个MIGRATE_TYPES的区域， 比如MIGRATE_UNMOVABLE, MIGRATE_RECLAIMABLE,  MIGRATE_MOVABLE, MIGRATE_RESERVE等，迁移类型按照8M（假设max order=11）对齐。
+  + MIGRATE_RESERVE是最后的预备队，用于紧急内存分配。
+  + MIGRATE_RECLAIMABLE用于可回收的内存分配，
+  + MIGRATE_UNMOVABLE是通常的不可以移动的内存分配，
+  + MIGRATE_MOVABLE用于可移动的内存分配，
+    根据内存分配的使用者需求，确定在那个区域中进行分配，这样可以减少单页的内存分配打断连续的内存区域的概率。
++ 内存回收尽可能减少碎片
+  linux系统为了更好的性能，会尽可能把空闲的内存用于缓存，当系统空闲的内存低于一定水平线（watermark）后就会进行内存扫描，在扫描中会尽可能回收出连续的区域
+  + 对可以回收的内存进行回收， 回收的同时会把连续的小块区域合并成大块区域
+  + 对造成连续区域碎片的可以移动的内存页，迁移这些页内的内容，重新合并成一个连续区域
++ 迁移类型之间的fallback来解决内存复用
+  当一个迁移类型中的内存页不够分配的时候，就会fallback到其他迁移类型中，会根据不同的分配类型确定fallback的顺序。
+  fallback相当于借用，每次借用的时候都是按照一个max_order_block来借用的， 比如我们配置的这个值是11，那么每次借用就是2048*4K=8M大小。借用的时候归还也是整块归还。
++ oom Killer
+  当内存分配不允许失败，同时内存由于碎片分配不出来时，会执行oom（out of memory）过程，据一些规则，挑选某些进程，直接杀死这些进程来释放内存
+
+即使采用了以上种种缓解内存碎片的办法，仍然会遇到因为内存碎片导致整个系统几乎不能用的情况。
+****** CMA（continuous memory allocation）
+在kernel 3.4以后开始引入了CMA内存分配的方式，主要是用来满足大块的连续内存分配，原理如下：
++ 设置一个新的迁移类型MIGRATE_CMA
+  系统使用的内存，只有允许移动的系统内存才能在CMA中分配，其他不能移动的内存分配也不能迁移到CMA这个区域。
++ 使用dma_alloc_coherent来分配物理连续内存
+  当需要连续物理内存的时候，调用dma_alloc_coherent会把选定区域的内存页迁移出去，形成连续物理内存。
+
+通过这种方式可以满足大部分的驱动和内核的连续物理内存要求，并在驱动不使用cma内存的时候，又可以用于可移动的系统内存分配，提供内存利用率。
+即使这样，如果CMA区域内按照CMA的分配方式也可以出现碎片，这种就只能通过把CMA区域设定得足够大来解决。
+
+**** slab分配器
+根据前面的讨论，对小于4k的内存分配，简单的一个单页分配就可以解决问题，没有碎片的问题，但如果仅仅为了分配几个字节就使用一个页，太浪费了，所以就出现了slab分配器。
+
+通过kmem_cache_create创建一个slab高速缓存，创建的时候会指定在该slab中的object的大小，初始的object的个数。实现就是使用多个不连续的4k的页，每一个4k的页满足很多个对象的分配（4096/object大小），这样可以提高内存的利用率。
+
+在kernel的不同子系统中都有使用各种大小的高速缓存，高速缓存的好处有：
++ 没有碎片问题
+  每个高速缓存可以简单理解为一个可伸缩的数组，每一项都是固定大小的
++ 分配快速
+  内存的分配不涉及到kernel的内存分配子系统，后者是相当复杂和缓慢的
++ 内存利用率高
+  几乎没有字节浪费
++ cache line优化
+  使用cacheline着色等技术，优化cache访问
++ 可以动态伸缩
+  在使用的对象不多的时候，可以把内存还给系统。分配空间不够用的时候，会从系统中再申请新的4k页。
+
+除了各个子系统的专用的高速缓存外， linux系统中还提供了通用的高速缓存用于内存分配，通用的slab中的object的大小分别是， 16，32，64，128，256 一直到1024大小。
+*** RTOS中的动态内存分配
+**** 282f的动态内存分配
+目前合肥的需求是提供一个不需要支持wifi，和仅仅需要支持蓝牙的开发平台，采用的方法是保留系统最基本的框架（去掉wifi，解码，播放，录音，网络等）， 移植了282f的动态内存管理机制，能提供出来的最大的内存有98K。
+
+2828f中使用内存策略简单如下：
++ 各个功能模块，都尽量使用动态内存分配的malloc和free来分配内存
++ 尽量不使用静态内存，或slab的方式，把可用的内存尽可能的都留给heap
++ 使用防碎片的heap管理算法
+  把可以使用的内存分为2k页大小的block， 每一个进程使用内存时，会先从系统中分配一个2k的页，在每一个2k页内使用伙伴系统来管理内存。2k只有全部空闲的话才会还给系统。
+****** 内存碎片问题
+  通用的动态内存管理算法最大的问题就是碎片的问题，linux算是为放置碎片做了更多的工作的，同时还有mmu，可以移动内存，仍然避免不了碎片问题， 只有使用cma之后，才解决了驱动程序和内核需要的碎片问题。
+  282f的内存管理机制与linux相比，更不容易解决问题，主要如下：
+  + 没有mmu
+    因此不能做通过移动内存的方式来合并素片
+  + 防碎片措施少得多
+    有更多的碎片的可能
+  + 可管理的内存少太多
+    管理的内存越多，遇到碎片的可能就越少
+
+  282f的算法很类似前面讨论的基本的linux对4k页的管理的方式的方法，  linux中每8M（max_block_order=11的时候）是一个block， 其中8M内就是使用伙伴系统管理的。
+  在这里我们把linux的4K的页当做282f中的一个字节。8M刚好是2K个页。可以相当于282f的2k的block。
+
+  根据以前做平板的经验可以知道，在没有使用CMA内存之前， 在1G内存（相当于256K个页）的情况下，最后分配一个32K大小的页（相当于8个页），都分配不出来。这个还是在linux还有更多的防止碎片化的机制（不同的迁移类型来隔离分配，移动内存页来减少碎片）的情况，如果在同样的内存压力情况下，282f的碎片问题应该更难解决。
+
+  282f在实际的使用中没有遇到很多的碎片问题，有两个可能的解释：
+  + 总的内存在各个场景下还是相对比较宽裕的，
+    不管哪种通用的内存管理系统，在总内存压力不大，分配的size不够碎，动态并发性不高的时候，还是相对不太容易遇到碎片问题的。
+  + 或者不同场景下内存使用的时候需要注意特别的顺序。
+    专门优化各个应用场景，让应用或系统模块申请内存的方式配合起来，避免碎片出现。
+**** 3503 系统中的内存使用策略
+***** 主分支目前故事机方案的内存使用情况
+| module name             | data size |
+| actions应用框架核心服务 |    31,102 |
+| 应用框架开源部分        |    14, 753 |
+| 网络核心协议栈          |    24,441 |
+| wifi驱动相关栈             |     8,995 |
+| 内核                    |     6,632 |
+| 设备驱动                |     3,999 |
+| 故事机应用              |     3,032 |
+
+说明：
++ 解码库部分  53k
+  不同编码格式和解码格式是共用内存的， 相互overlay，最大的overy是53K
++ 系统框架和核心服务  31K
+  主要是两部分核心服务使用的heap和stack，启动heap 17k， stack 12k左右， heap中还包含了wifi驱动使用的动态内存。
++ 应用开源部分 14K
+  提供给用用程序使用的堆， 和系统核心服务使用的heap分开管理
++ 网络协议栈部分 24K
+  主要是网络使用的buffer， 总共10个， 每个1.6k，以及其他的一些小buffer，
++ wifi驱动  9k
+  wifi固件这部分主要是驱动使用的静态内存部分，主要是一个比较大的stack。wifi驱动使用动态内存都在应用框架的heak中分配
++ 内核和其他驱动 10K
+***** zephyr中的内存使用策略
+在zephyr中，内存使用的思路如下：
++ 静态或全局变量
+  对重要的数据结构，使用全局变量的方式，比如大部分的内核和设备驱动，
++ 静态的pool
+  大量的同一类型和的的数据结构或同样大小的缓冲区，使用类似linux的高速缓存slab结构，在zephyr中称为pool，但与linux的高速缓存不同的是，zephyr中的slab底层没有页系统支持，所以是不可以伸缩的。
+  这部分主要是网络协议栈中使用的网络缓冲区，以及相应的数据结构
++ 通用heap
+  zephyr中提供了一种heap的管理算法，就是把一整块的内存区域使用伙伴算法来管理。
+  尽管zephyr提供了这种方式，但在整个的系统代码中并没有使用。
++ 3503增加的heap管理机制
+  由于有一些需求，使用静态变量或pool都不能满足，而必须要使用heap的方式，主要有：
+  + wifi驱动在运行的时候需要经常的动态分配不同大小的内存，需要10多K左右
+  + 网络上层协议的解析，比如jason格式的parse，需要经常的分配和释放内存
+  + 应用各个互斥场景切换，比如播放，录音，百科文档，语音留言等。
+
+  为了充分利用内存就需要使用heap的方式，在3503中增加一种heap的管理方式，暂且命名为slab_heap吧。
+
+  slab_heap使用的方法类似linux的通用高速缓存的方式，会提供32，64，128， 256，512，1024..等各种size的pool。每个pool根据实际的需要配置一个个数。
+
+  与linux通用的高速缓存不同的有两点：各个pool的size不一定是2的整数幂，每个pool支持有限的伸缩。
+
+  在3503的发布版本上，整个系统只提供了一个slab_heap，凡是需要动态内存的地方都这个heap，在内部的开发分支上，把不开源的系统服务和wifi使用一个slab heap， 然后所有开源部分的应用使用另外一个slab heap。前者为17k， 后者为14k。分开的好处就是应用的内存使用永远不会影响到系统。
+****** 内存利用率问题
+使用slab heap的有点是没有内存碎片的问题， 缺点是如果在多场景下提高内存利用率的问题。
+
+举例如下：
+目前我们需要同时支持蓝牙和wifi的功能，这两部分都属于不开源的部分，都使用系统的slab heap。但两者的使用方式如下：
+wif音频运行时i需要的内存是 10个 512*3 的buffer， 蓝牙音频运行时需要的是30个512字节的buffer，wifi和蓝牙驱动都需要同时存在。
+如果内存管理算法做得足够好，那么理论上来说15K的内存就够了。而使用slab_heap的方式，可能就需要25K才够。主要原因是10个512*3的buffer，并不能有效的作为30个512字节的buffer来使用。
+
+可能的改进：
+如果这样的情况出现较多，可以考虑进一步增加slab heap的功能和feature，在slab heap之下再增加linux的页管理的机制。最终实现不同size的pool可以真正的动态伸缩，通过底层的页来在不同的pool中复用内存。
+这样的修改除了增加复杂性外，需要根据sdk的实际情况来权衡一些要考虑的问题，从目前sdk的实际情况看，利用率是ok的， 不增加是更好的选择，后续整合蓝牙音频后，再具体情况看一下
+要考虑的问题有：
++ 底层页的大小
+  页至少要能够满足一个最大的object的大小， 比如2k。
+  每一个pool即使用不到2k大小， 也会占用一个页， 比如32byte的object， 如果数量不多可能就会浪费一些内存。
++ 回收页的机制
+  如何，何时回收，缩减某些pool的size，以腾出内存给需要的pool。
+***** broadcom wiced BT的动态内存管理
+broadcom的wiced bt是一个蓝牙的开发平台，同时支持BR EDR  BLE以及各种profile。
+| Technology            | Bluetooth (BR + EDR + BLE)                        |
+| Bluetooth Spec.       | Bluetooth 4.2                                     |
+| RX Sensitivity        | -93.5 dBm                                         |
+| Max. TX Power         | 12 dBm (Programmable TX Power)                    |
+| Power-Class           | Class 1, Class 2                                  |
+| CPU Core              | ARM Cortex M3                                     |
+| Flash/EEPROM          | Ext. Flash/EEPROM support                         |
+| Internal              | 848 KB ROM                                        |
+| SRAM                  | 352 KB                                            |
+| Coexistence Interface | GCI SECI (2-wire)                                 |
+| Serial Interfaces     | 2 UART, 2 SPI, I2C, PCM, I2S                      |
+| ADC                   | 10-bit @ 100 KHz (Static) 13-bit @ 16 KHz (Audio) |
+| GPIOs                 | Up to 24                                          |
+
+在每一个应用的开始会调用wiced_bt_stack_init来初始化， 该函数的第三个参数就是sdk的buffer的配置， 针对不同的使用场景，有不同的buffer配置， 比如对a2dp协议的例子：
+#+BEGIN_SRC C
+ * Configure buffer pools used by the stack  according to application's requirement
+ *
+ * Pools must be ordered in increasing buf_size.
+ * If a pool runs out of buffers, the next  pool will be used
+const wiced_bt_cfg_buf_pool_t a2dp_sink_cfg_buf_pools[] =
+{
+/*  { buf_size, buf_count } */
+    { 64,       12  },      /* Small Buffer Pool */
+    { 272,      6   },      /* Medium Buffer Pool (used for HCI & RFCOMM control messages, min recommended size is 360) */
+    { 1056,     6   },      /* Large Buffer Pool  (used for HCI ACL messages) */
+    { 1056,     0   },      /* Extra Large Buffer Pool - Used for avdt media packets and miscellaneous (if not needed, set buf_count to 0) */
+};
+#+END_SRC
+在这里可以看出，使用了几个固定大小的pool分别用于hci， avdtp协议的动态内存分配， 这些协议在wiced bt平台是不开源的。
+
+而对开源部分的内存使用，wiced bt中提供了多种内存管理算法以供选择。有基于pool的方式的， 也有基于通用的heap管理的方式的。
+***** aihora AB1520S耳机和音箱方案
+
+洛达的AB1520s方案的ram总共32k， 其中13k左右是全局变量使用，剩下的19k用作动态分配的heap， 内存堆管理使用多个预先配置的pool的方式，
+
+一个典型的具体配置如下：
+| pool名称             | 大小（项数x大小） |
+| CallArrayEntries     | 16 * 4            |
+| TimerArrayEntries    | 50 * 4            |
+| OSMEM1ArrayEnties    | 40 *50            |
+| OSMEM2SmallTxEntries | 9 * 702           |
+| OSMEM2TinyRxEntries  | 3 * 62            |
+| OSMEM2SmallRxEntries | 3 * 1100          |
+| OSMEM2LargeRxEntries | 2 * 1100          |
+| UartDmaRxBufSize     | 380               |
+**** FreeRTOS中的heap管理
+FreeRTOS提供了5种HEAP分配方案。各应用可以按照自己的实际需求来选择合适的HEAP实现方式。HEAP实现代码位于Source/Portable/MemMang目录下。
+***** 方案 1 - heap_1.c
+这是所有方案里最简单的。当内存分配后，它不允许释放内存，但除了这点，它适合于大量的应用。若应用永远不会删除任务或队列（永远不会调用 vTaskDelete () 或 vQueueDelete ()），则可使用。
+heap_1.c 适用于很多在内核启动前即创建了所有任务和队列的小实时系统。
+***** 方案 2 - heap_2.c
+此方案使用了最佳适用算法，与方案1不同，它允许释放之前分配的块。然而，它不会将相邻的自由块合并为一个大块。
+heap_2.c 适合于很多必须动态创建任务的小实时系统。
+***** 方案 3 - heap_3.c
+它仅是标准 malloc() 和 free() 函数的封装。它可确保线程安全。此方案特点为：
+• 需要链接器建立堆，编译器库提供 malloc() 和 free() 的实现。
+• 它不是确定性的。
+• 可能会大幅增加内核代码量。
+***** 方案 4 - heap_4.c
+此方案使用了首先适用算法，与方案 2 不同，它不会将相邻的自由内存块合并为一个大块（它不包含合并算法）。
+***** 方案 5 - heap_5.c
+它允许程序设置多个非连续内存堆，比如需要快速访问的内存堆设置在片内RAM，稍微慢速访问的内存堆设置在外部RAM。每个内存堆的起始地址和大小由应用程序设计者定义。
+
+*** 建议的主要的设计策略
+RTOS的系统，受限于实际可用的资源，需要针对最大场景对内存资源做一些大的规划，不能太指望通用的heap管理策略。
++ RTOS需要减少动态内存的使用方式
+  分多个层次：
+  适合使用全局数据的使用全局数据
+  适合使用专用的高速缓存pool的使用专用的pool
+  必须使用动态内存的才使用动态内存，而不是都尽可能的都是用动态内存。
++ 平台整合功能的动态内存使用方式需要使用可预测的管理方式
+  比如3503整合的wifi 音频相关的功能，后续会继续整合的蓝牙音频相关功能。
+  这部分的内存使用应当使用可以避免内存碎片的管理方式，内存碎片的最大的问题就是不可以预测性。
+  这部分的动态内存使用方式最好和应用的动态内存使用分开。分开的好处是容易做针对性的优化来提高使用率，以及不受应用内存分配算法的影响。
++ 可以整合多种动态内存算法，提供给应用层使用
+  由于平台上的应用的需求是千变万化的，可以也应当考虑提供多种算法供实际应用选择，同时也需要考虑能方便客户整合自己的内存管理算法。
+
+  举两个实际的例子：
+  + 合肥客户
+    只需要蓝牙的controller功能，甚至都不需要协议栈。
+    这种情况下，裁剪掉其他功能后，可以有接近100k的内存，主要的代码都是客户自己的代码， 提供一个类似282f的算法那也是可以的， 遇到碎片问题客户应该可以自行解决。
+    也可以由客户自己整合内存管理算法。
+  + 指纹锁
+    只需要蓝牙BLE的功能，
+    甚至不需要使用内存分配算法， 整个算法是自己管理内存的。
+
+*** RTOS选型
+**** RTOS对比
+
+目前主要的RTOS的操作系统可以参见下面的链接
+https://www.osrtos.com
+http://www.linuxidc.com/Linux/2016-11/137178.htm
+
+主要考察了如下几个OS：
+|              | mbed OS      | FreeRTOS                   | Zephyr                          | nuttx      |
+| 资源占用     | 较小         | 小                         | 小                              | 较大       |
+| 许可证       | apache 2.0   | LGPL                       | Apache 2.0                      | bsd        |
+| 社区         | 主要arm大厂  | 个人开发者                 | 个人，intel，nordic以及linaro等 | 基本无     |
+| 无线协议支持 | 以太网       | 以太网                     | 15.4，蓝牙，以太网              | 以太网     |
+| 组件         | 有不开源部分 | 有不开源部分，且许可证不同 | 开源                            | 开源       |
+| 跨平台       | arm          | arm mips                   | arm 可增加mips                  | arm mips   |
+| 可配置性     | 一般         | 不同组件不同               | 好    Kconfig                   | 好 Kconfig |
+| 组件丰富程度 | 好           | 不好                       | 较好                            | 最好       |
+| 开发便利性   | 最好         | 不相关                     | gcc环境，后续会支持keil，iar等  | gcc环境    |
+| soc hal      | 有           | 无                         | 有                              | 有         |
+| 文档化       | 好           | 一般                       | 好                              | 差         |
+
+也同时也评估过其他的OS ，比如rt-thread  contiki等。
+
+选择主要考虑如下方面：
++ 资源占用
+  从资源占用看， 这4个os都基本可以满足要去， 除了nuttx稍大一些外
++ 许可证
+  bsd，和apache的许可证是最适合商用的， 可以根据自己需要闭源和开源都没有限制。
+  FreeRTOS本身是LGPL的，相对还好，主要问题是， FreeRTOS之上的组件的都是不同的license，有一些不开源的同时，还不是免费的。
+  如果选择FreeRTOS的话，比较好用的上层组件只有lwip这个tcp/ip的协议栈，这个也是最常看到的组合，其他比较多的组件有license和开源的问题。
++ 社区支持
+  之所以选择一个新的操作系统来，主要还是为了这一点，要充分利用开源和社区的力量，尽量避免独力发展一套私有系统。如果重点不是考虑这一点，继续使用ucos也是一个选择。
+  + nuttx
+    从社区支持看， nuttx基本都是由主要的开发者一个人维护的，是最大的问题
+  + FreeRTOS
+    FreeRTOS采用的比较多，尤其是FreeRTOS + lwip的组合，基本上每一个wifi vendor都有提供这样组合的示例。但FreeRTOS的问题也很明显，基本只有一个核心可以用。其他部分基本都要自己完成。
+  + mbed
+    mbeded主要是arm在推动，各个arm芯片的供应商支持mbed的方式，主要是把自己的芯片和开发板适配到mbed平台。
+    mbed平台的其他各部分组件的整合是arm和社区推动的，但特别的松散，但评估的时候看，各个组件的质量不同，整合起来的质量和稳定性也不尽如意。同时，有一些组件还包含二进制的部分
+    5601的ic，可以考虑后续适配到mbed上
+  + zephyr
+    license是apache的， 同时整合进来的组件都是apache或bsd的license，也没有不开源的部分，目前已经整理进来很丰富的组件了， 比如tcp/ip， ble，zigbee， 文件系统，mtls等。
+    是Linux Foundation托管的项目，采用了类linux内核的社区模式，个人开发者也可以参与其中，同时也有比较多的大公司主导推动，intel，synopsis  nxp nordic 等公司。
+    目前zephyr的发展和迭代都非常快，bug修复也很快。像BLE的mesh在标准发布没有多久就可以支持了。https://www.linux.com/news/event/open-source-summit-na/2017/4/building-wearable-device-zephyr
++ 无线协议支持
+  在评估了前面几条后，zephyr基本上就是唯一选择了。如果是arm soc，可以支持mbed平台而已。并不会作为主要的软件基线。
+  选择zephyr还要一个重要的考虑就是，可以整合蓝牙音频，以及蓝牙BLE和WIFI相关的到同一个平台中。
+  这样可以让多颗IC使用同一个软件平台。
++ 可配置性支持
+  zephyr和nuttx都使用了类似linux的Kcofig系统，比较方便配置需要的功能，这个虽然不是至关重要的功能，也是很需要的一个功能，方便后续再一个sdk中逐渐整合越来越丰富的功能，但又能很容易的去掉不要的功能。
+
+  两个例子：
+  支持基本蓝牙功能后，合肥基于wifi故事机的版本， 经过简单的配置和一些修改就整合出来一个蓝牙的版本。
+  蓝牙指纹锁需要提供一个BLE的版本，这个通过简单配置，较少的工作就可以提供一个BLE版本的功能。
++ 其他方面
+  剩下的其他方面的影响并不致命，就算遇上问题也是可以克服的， 比如：
+  + 音频解码
+    就算linux这样的系统也需要一定的整合工作， 对RTOS需要自己整合
+  + GUI
+    zephyr并没有整个显示和GUI，估计将来也不会整合GUI进来， 这个工作如果需要可以由我们自己完成
+  + API不成熟
+    由于zephyr整个项目还处于早期，所以，经常还会出现api的大幅变化，这个需要我们在同步跟踪新版本的时候，有所取舍同时也需要做好测试
+  + bug较多
+    从目前看，kernel本身没有遇到太多问题，其他网络等组件，还不够成熟，甚者有一些低级错误，但这个影响还好，一来是zephyr自身修复较快，二来，小系统我们自己也是可以掌握和debug的，
+**** zephyr是否适合做复杂系统
+系统的复杂性主要是由几个方面带来的
++ 系统的主要功能，
++ 功能之间的主要关系和协作，
++ 所受到的环境或资源限制，
++ 要达到的质量和性能要求。
+从这几个方面来说，os核心的选择主要影响后两者。 os+组件的选择会同时影响这4个方面。当然，最重要的影响还是产品的规格。
+
+从复杂系统角度而言，用linux是最好的选择。
+
+但就RTOS而言，从考察的各个系统来说：
+nuttx可以认为是linux的瘦身版，在稍微放宽资源限制的时候，是最适合的， os核心的服务很丰富，也有丰富的组件，但由于生态的原因不能选择。
+FreeRTOS基本上可用的就是os+lwip，其他部分都需要自己构建
+mbed和zephyr差不多，但mbed的os本身是有一些问题的，组件同样有一些问题。
+
+可以拿我们熟悉的ucos来做一个对比， 我们使用的ucos也只使用一个核心，其他部分全是我们自己构建的，就单纯对比ucos和zephyr的核心来说， zephyr相对uc的核心提供了更多的操作系统相关的服务，我们使用uc可以做到的复杂性，使用zephyr一定是可以做的。
+zephyr系统除了核心外，我们还是复用了很多其他的组件的，只是没有的组件需要我们自己（或其他第三方）构建，相对uc系统而言，已经大大的减少了工作量了， 因而会更容易。
+
+因此，使用zephyr构建复杂系统不应该会有很大的不足。
+
+总的来说:
+zephyr算一个复杂度中等的os， 比uc提供的功能丰富一些。其实就目前看对BLE only的都稍微重了一点。
+contiki和mbed os 是更轻量级的，洛达的os是更轻量级的， 完成蓝牙音频的功能也没有问题
+nuttx是更重量级的， 基本算瘦身的linux。
+** 1009 aihora分析
+*** 存储器布局
+| START     | END       | USED      | MEMORY              |
+| 009607H | 00EFFFH |   3584 | EDATA               |
+| 00F000H | 00FFDFH |   3690 | EDATA_HIEDATA       |
+| 00FFE0H | 00FFFFH |      2 | EDATA_PATCH_PARA    |
+| 800040H | 800FFFH |    334 | ECODE_STARTUP       |
+| 801000H | 801FFFH |    366 | HCONST_MP_PARAM     |
+| 801000H | 801FFFH |    663 | HCONST_MP_PARAM_F   |
+| 802000H | 8020FFH |     64 | HCONST_DESCRIP      |
+| 802100H | 8022FFH |    468 | HCONST_CFGHEAD      |
+| 802300H | 80FFFFH |     48 | CODE                |
+| 802300H | 84FFFFH |   1415 | ECODE               |
+| 802300H | 84FFFFH |   3898 | HCONST              |
+| 802300H | 84FFFFH | 289118 | ECODE_FLASH         |
+| 802300H | 84FFFFH |   8322 | HCONST_FLASH        |
+| 850000H | 87FFFFH | 168354 | HCONST_DSP_ROM      |
+| 880000H | 88FFFFH |  15816 | HCONST_CONFIG       |
+| 890000H | 8F5FFFH |  54893 | HCONST_VO_DAT       |
+| 8F6000H | 8F6FFFH |   4094 | HCONST_DSP_FUNCPARA |
+| 8F7000H | 8F7FFFH |    543 | HCONST_DSP_HPFPARA  |
+| 8F7000H | 8F7FFFH |   2224 | HCONST_DSP_PEQPARA  |
+| 8F8000H | 8F8FFFH |      1 | HCONST_APP_CALLNAME |
+| 8F9000H | 8F9FFFH |    503 | HCONST_MMI_V_NVRAM2 |
+| 8F9600H | 8F9FFFH |      3 | MMI_C_V_NVRAM2      |
+| 8FA000H | 8FAFFFH | 503 | HCONST_MMI_V_NVRAM  |
+| 8FA600H | 8FAFFFH | 3 | MMI_C_V_NVRAM       |
+
++ 内存部分
+  0x8000~0x9607 共5639字节ROM和闭源部分使用的全局内存，其中还包含一些在ram中的patch代码，
+  0xf000 开始的3690字节的内存，存放的主要是不开源部分，在flash上的代码使用的全局内存，比如充电，温度，fm以及蓝牙链路管理的一些数据结构。
+  0x9607 开始的3584字节 开始的部分主要就是开源部分使用的内存，包括MMI，驱动，以及profile等。
+  剩下的大约19k的内存，用作全局的heap， heap是按照多个pool管理的，
+  一个典型的具体配置如下：
+  | pool名称             | 大小（项数x大小） |
+  | CallArrayEntries     | 16 * 4            |
+  | TimerArrayEntries    | 50 * 4            |
+  | OSMEM1ArrayEnties    | 40 *50            |
+  | OSMEM2SmallTxEntries | 9 * 702           |
+  | OSMEM2TinyRxEntries  | 3 * 62            |
+  | OSMEM2SmallRxEntries | 3 * 1100          |
+  | OSMEM2LargeRxEntries | 2 * 1100          |
+  | UartDmaRxBufSize     | 380               |
++ Flash部分
+  固化了1M的nor， 总共用了551,663字节， 其中代码289,118， DSP的代码是168，354，剩下的注释配置数据， 其中语音提示音配置数据54,893，包含了中英文， 一种语言的话大概27K
++ ROM部分
+  从FE8000开始的96k是rom，大部分（75K左右）是蓝牙的链路控制（LC），主机控制（HC），以及链路控制切换（LCS），剩下的一些其他代码，主要是kernel，设备驱动，以及SDK的一些运行环境的代码。
+*** 主要模块
+**** 模块划分
+主要模块的资源开销如下：
+| module name | code size | data size | rodata size |
+| COMMON      |      3924 |       226 |         842 |
+| sector      |         0 |         0 |       22300 |
+| DRIVER      |     32958 |       486 |       55750 |
+| DSP         |       904 |         5 |           0 |
+| MMI         |     73329 |      1560 |        2928 |
+| HC          |     20125 |       939 |        1271 |
+| LM          |     94343 |      2526 |        2329 |
+| LC          |     12326 |      2234 |         296 |
+| L2CAP       |      6673 |       380 |         506 |
+| GAP         |      2284 |        25 |           0 |
+| SDAP        |      6484 |        98 |          55 |
+| HFP         |      7250 |        94 |        1688 |
+| A2DP        |      9754 |       136 |         164 |
+| AVRCP       |      4673 |        44 |      184834 |
+| RFCOMM      |      6643 |       146 |         274 |
+| AVCTP       |      1409 |        44 |          18 |
+| AVDTP       |      2978 |        26 |          18 |
+| _Rom_Only   |     92860 |      3572 |        5498 |
+| Patch       |       859 |         2 |           0 |
+
+**** 模块简述
+***** sector
+存放在norflash上的配置数据，各个模块的配置数据，包括：soc的寄存器，rf参数，设备驱动，蓝牙相关协议，语音提示音等。
+其中dsp的配置中有看到支持两个mic， 4路AEC，以及语音命令。
+
+| file name                                                                  | rodata size |
+| .\output\AB1520S\Release_Flash\sector_config0_header.obj                   |          48 |
+| .\output\AB1520S\Release_Flash\sector_config1_header.obj                   |         219 |
+| .\output\AB1520S\Release_Flash\sector_boundary_header.obj                  |          48 |
+| .\output\AB1520S\Release_Flash\sector_voice_data_header.obj                |          21 |
+| .\output\AB1520S\Release_Flash\sector_runtime_header.obj                   |          12 |
+| .\output\AB1520S\Release_Flash\sector_tool_misc_header.obj                 |          21 |
+| .\output\AB1520S\Release_Flash\sector_dsp_data_header.obj                  |          21 |
+| .\output\AB1520S\Release_Flash\sector_merge_runtime_header_1.obj           |          39 |
+| .\output\AB1520S\Release_Flash\sector_merge_runtime_header_2.obj           |          39 |
+| .\output\AB1520S\Release_Flash\sector_a2dp_nvram_ctl_type.obj              |          57 |
+| .\output\AB1520S\Release_Flash\sector_driver_buzzer_data_type.obj          |          42 |
+| .\output\AB1520S\Release_Flash\sector_driver_led_data_type.obj             |         813 |
+| .\output\AB1520S\Release_Flash\sector_driver_ringtone_data_type.obj        |         426 |
+| .\output\AB1520S\Release_Flash\sector_hc_parameter_type.obj                |         143 |
+| .\output\AB1520S\Release_Flash\sector_lc_misc_ctl.obj                      |          43 |
+| .\output\AB1520S\Release_Flash\sector_lm_parameter_type.obj                |           6 |
+| .\source\SECTOR\sector_mcu_dsp_parameter_init.obj                          |          22 |
+| .\output\AB1520S\Release_Flash\sector_mmi_nvram_keymap.obj                 |         437 |
+| .\output\AB1520S\Release_Flash\sector_mmi_nvram_type.obj                   |       1,356 |
+| .\output\AB1520S\Release_Flash\sector_sys_local_device_control_type.obj    |          95 |
+| .\output\AB1520S\Release_Flash\sector_sys_local_device_info.obj            |          52 |
+| .\output\AB1520S\Release_Flash\sector_sys_local_device_EIR.obj             |          54 |
+| .\output\AB1520S\Release_Flash\sector_sys_memory_config.obj                |          22 |
+| .\output\AB1520S\Release_Flash\sector_mmi_driver_nvram_backup_type.obj     |          45 |
+| .\output\AB1520S\Release_Flash\sector_sm_nvram_type.obj                    |           6 |
+| .\output\AB1520S\Release_Flash\sector_uart_parameter.obj                   |          16 |
+| .\output\AB1520S\Release_Flash\sector_afe_init.obj                         |         513 |
+| .\output\AB1520S\Release_Flash\sector_sfr_init.obj                         |         453 |
+| .\output\AB1520S\Release_Flash\sector_rf_misc_ctl.obj                      |         132 |
+| .\output\AB1520S\Release_Flash\sector_hw_misc_ctl.obj                      |          15 |
+| .\output\AB1520S\Release_Flash\sector_gap_nvram_type.obj                   |          11 |
+| .\output\AB1520S\Release_Flash\sector_tool_info.obj                        |       2,089 |
+| .\output\AB1520S\Release_Flash\sector_ae_info.obj                          |          51 |
+| .\source\SECTOR\sector_driver_ctl_type.obj                                 |          49 |
+| .\output\AB1520S\Release_Flash\sector_application.obj                      |          10 |
+| .\output\AB1520S\Release_Flash\sector_iap2_type.obj                        |           0 |
+| .\output\AB1520S\Release_Flash\sector_uart_parameter_eng.obj               |          16 |
+| .\output\AB1520S\Release_Flash\sector_le_misc_ctl.obj                      |           0 |
+| .\output\AB1520S\Release_Flash\sector_sys_patch_code_init.obj              |         136 |
+| .\source\SECTOR\sector_dsp_vp_nb.obj                                       |       8,706 |
+| .\output\AB1520S\Release_Flash\sector_mp_parameter.obj                     |         366 |
+| .\output\AB1520S\Release_Flash\sector_mmi_driver_variation_nvram_type2.obj |         503 |
+| .\output\AB1520S\Release_Flash\sector_mmi_driver_variation_nvram_type.obj  |         503 |
+| .\output\AB1520S\Release_Flash\sector_dsp_func_para.obj                    |       4,094 |
+| .\output\AB1520S\Release_Flash\sector_dsp_hpf_param_type.obj               |         543 |
+| .\output\AB1520S\Release_Flash\sector_dsp_peq_param_type.obj               |           0 |
+| .\source\SECTOR\sector_app_callername_data.obj                             |           1 |
+| .\output\AB1520S\Release_Flash\sector_mmi_customize_v_nvram2.obj           |           3 |
+| .\output\AB1520S\Release_Flash\sector_mmi_customize_v_nvram.obj            |           3 |
+| .\output\AB1520S\Release_Flash\sector_mmi_le_variation_nvram_type.obj      |           0 |
+| .\output\AB1520S\Release_Flash\sector_mmi_le_variation_nvram_type2.obj     |           0 |
+| .\output\AB1520S\Release_Flash\sector_mp_parameter_F.obj                   |           0 |
+
+***** COMMON模块
+| .\source\COMMON\flash_descriptor.obj |0 |0 |64 |0|
+802000    64 OBJECT   LOCAL  _FlashDescriptor
+应该是nor flash的分区划分。
+| .\source\COMMON\BootCode.obj |334 |4 |0 |0|
+800043   331 FUNC     LOCAL  SYS_DecideBootCode??
+boot代码，brom出来应该从这个地方跑起来，跑起来后会填充gFlashDescriptor指向的数据结构，然后再执行sdk_app
+9607     4 OBJECT   LOCAL  gFlashDescriptor
+在内存9607的位置定义了一个gFlashDescriptor的全局指针， 指向一个flash descriptor的结构， 这个结构描述了在flash的配置区域放置的各种配置数据。
+***** 链路层管理
+
+| HC          |     20125 |       939 |        1271 |
+| LM          |     94343 |      2526 |        2329 |
+| LC          |     12326 |      2234 |         296 |
+
+都不开源
++ HC
+  主要是HCI层命令和扩展命令处理
+  | file name                       | code size | data size | rodata size |
+  | .\source\HC\hc_flash.obj        | 6,883     |       485 |       1,112 |
+  | .\source\HC\hci_xport_flash.obj | 448       |         0 |           0 |
+  | .\source\HC\INT1_ISRHandler.obj | 182       |         0 |           0 |
+  | .\source\HC\HC_VCMD_flash.obj   | 11,051    |        32 |         159 |
+  | .\source\HC\ChAssess_Hdlr.obj   | 1,561     |       422 |           0 |
++ LM
+  链路层协议处理，包含LMP， AFH，加密key，配对，sniff模式，连接建立(acl sco esco)，电源管理等功能。
+  | file name                                          | code size | data size | rodata size |
+  | .\source\LM\LM.obj                                 | 24,154    |     2,235 |         578 |
+  | .\source\LM\LM_AFH.obj                             | 2,848     |         0 |           7 |
+  | .\source\LM\LM_AnyTimePDU.obj                      | 1,643     |         0 |           0 |
+  | .\source\LM\LM_AuthEnc.obj                         | 11,130    |         0 |           2 |
+  | .\source\LM\LM_CheckFeatures.obj                   | 0         |         0 |           0 |
+  | .\source\LM\LM_ConnectSetup.obj                    | 1,416     |         0 |           0 |
+  | .\source\LM\LM_CreateConnection.obj                | 3,147     |         0 |           0 |
+  | .\source\LM\LM_CreateSynchronousConnection.obj     | 5,167     |         0 |           0 |
+  | .\source\LM\LM_Detach.obj                          | 2,366     |         0 |           0 |
+  | .\source\LM\LM_ExtendedSynchronousConnectSetup.obj | 2,601     |         0 |           0 |
+  | .\source\LM\LM_ExtendedSynchronousDisconnect.obj   | 354       |         0 |           0 |
+  | .\source\LM\LM_Hold.obj                            | 1,851     |         0 |           0 |
+  | .\source\LM\LM_InformationRequest.obj              | 3,515     |         0 |           0 |
+  | .\source\LM\LM_Inquiry.obj                         | 1,210     |         2 |           0 |
+  | .\source\LM\LM_Misc.obj                            | 1,005     |         0 |           0 |
+  | .\source\LM\LM_PacketTypeChange.obj                | 2,751     |         0 |           0 |
+  | .\source\LM\LM_PowerControl.obj                    | 881       |         0 |           0 |
+  | .\source\LM\LM_QoS.obj                             | 1,460     |         0 |           0 |
+  | .\source\LM\LM_RoleSwitch.obj                      | 5,111     |         0 |           0 |
+  | .\source\LM\LM_Security.obj                        | 6,779     |         0 |          36 |
+  | .\source\LM\LM_SecurityTable.obj                   | 0         |         0 |       1,536 |
+  | .\source\LM\LM_SimplePairing.obj                   | 5,895     |       289 |         170 |
+  | .\source\LM\LM_SniffMode.obj                       | 6,526     |         0 |           0 |
+  | .\source\LM\LM_SynchronousConnectSetup.obj         | 1,687     |         0 |           0 |
+  | .\source\LM\LM_SynchronousDisconnect.obj           | 358       |         0 |           0 |
+  | .\source\LM\LM_Testmode.obj                        | 488       |         0 |           0 |
+  | .\source\LM\LM_VCMD.obj                            | 0         |         0 |           0 |
++ LC
+  链路控制：蓝牙master，slave模式，主从切换，匹克网管理
+  | file name                               | code size | data size | rodata size |
+  | .\source\LC\lc_flash.obj                | 3,387     |     2,067 |           0 |
+  | .\source\ROM\LC\LC_DirectTestmode.obj   | 740       |         0 |          56 |
+  | .\source\ROM\LC\LC_Initiating.obj       | 0         |         0 |           0 |
+  | .\source\ROM\LC\LC_MasterRoleSwitch.obj | 2,460     |         2 |          96 |
+  | .\source\ROM\LC\LC_Testmode.obj         | 3,085     |         1 |          24 |
+  | .\source\ROM\LC\LC_Scanning.obj         | 0         |         0 |           0 |
+  | .\source\ROM\LC\LC_SlaveRoleSwitch.obj  | 1,823     |         0 |          96 |
+  | .\source\LC\LC_RssiScan_flash.obj       | 831       |       164 |          24 |
+***** MMI
+MMI层都是开源的，
+MMI是蓝牙产品中的应用逻辑层，会处理跟协议无关，跟驱动实现本身无关的应用逻辑，相当于一个适配层，实现协议要求的应用处理的动作，和我们实现的bt engine有一些类似。
+除了蓝牙协议相关处理外，还有其他的使用驱动的适配层。本身的驱动的实现是不开源的。
+| file name                                            | code size | data size | rodata size |
+| .\output\AB1520S\Release_Flash\MMI.obj               | 3,129     |     1,045 |           0 |
+| .\output\AB1520S\Release_Flash\MMI_Base.obj          | 4,522     |         6 |           0 |
+| .\output\AB1520S\Release_Flash\MMI_ChgBat.obj        | 1,080     |         0 |           0 |
+| .\output\AB1520S\Release_Flash\MMI_Driver.obj        | 11,387    |       103 |       1,091 |
+| .\output\AB1520S\Release_Flash\MMI_Protocol.obj      | 2,255     |        20 |           0 |
+| .\output\AB1520S\Release_Flash\MMI_State.obj         | 3,783     |       168 |          96 |
+| .\output\AB1520S\Release_Flash\MMI_Timer.obj         | 223       |         0 |           0 |
+| .\output\AB1520S\Release_Flash\MMI_SDAP.obj          | 1,993     |         0 |          89 |
+| .\output\AB1520S\Release_Flash\MMI_A2DP.obj          | 3,559     |         3 |           0 |
+| .\output\AB1520S\Release_Flash\MMI_HFP.obj           | 11,970    |       123 |         577 |
+| .\output\AB1520S\Release_Flash\MMI_SectorManager.obj | 1,926     |         3 |           0 |
+| .\output\AB1520S\Release_Flash\MMI_ServiceRecord.obj | 0         |        24 |         166 |
+| .\output\AB1520S\Release_Flash\MMI_HCI.obj           | 14,275    |        16 |         350 |
+| .\output\AB1520S\Release_Flash\MMI_AVRCP.obj         | 4,239     |        26 |         283 |
+| .\output\AB1520S\Release_Flash\MMI_FM.obj            | 1,133     |         4 |          92 |
+| .\output\AB1520S\Release_Flash\MMI_TestMode.obj      | 1,253     |        16 |          70 |
+| .\output\AB1520S\Release_Flash\MMI_LineIn.obj        | 1,946     |         3 |         114 |
+| .\output\AB1520S\Release_Flash\MMI_TrspXport.obj     | 0         |         0 |           0 |
+| .\output\AB1520S\Release_Flash\MMI_Reconnect.obj     | 4,339     |         0 |           0 |
+| .\output\AB1520S\Release_Flash\MMI_LED.obj           | 268       |         0 |           0 |
+| .\output\AB1520S\Release_Flash\MMI_Inquiry.obj       | 0         |         0 |           0 |
+| .\output\AB1520S\Release_Flash\MMI_FCD.obj           | 49        |         0 |           0 |
+| .\output\AB1520S\Release_Flash\MMI_HID.obj           | 0         |         0 |           0 |
+| .\output\AB1520S\Release_Flash\MMI_LE.obj            | 0         |         0 |           0 |
+***** DRIVER
++ ABSDRIVER
+  不开源，
+  nor flash的读写，pmu，adc， i2c， gpio， led， i2s驱动。这部分在flash的驱动代码，加上在rom中的代码构成soc上叫完整的底层驱动
+  | file name                                      | code size | data size | rodata size |
+  | .\source\ABSDRIVER\drv_flash_flash.obj         |       407 |         0 |           0 |
+  | .\source\ABSDRIVER\drv_sector_flash.obj        |       564 |        12 |           0 |
+  | .\source\ABSDRIVER\drv_pmu_flash.obj           |         0 |         0 |           0 |
+  | .\source\ABSDRIVER\drv_adc0_flash.obj          |     1,009 |        54 |           0 |
+  | .\source\ABSDRIVER\drv_program_flash_flash.obj |       551 |         0 |           0 |
+  | .\source\ABSDRIVER\I2C.obj                     |     1,621 |        15 |           0 |
+  | .\source\ABSDRIVER\drv_led.obj                 |     1,140 |        53 |           0 |
+  | .\source\ABSDRIVER\drv_gpio_flash.obj          |     1,871 |         0 |           0 |
+  | .\source\ABSDRIVER\drv_i2s.obj                 |       320 |         0 |           0 |
++ Voice
+ 开源，语音提示和语音命令的支持，语音提示的实现比较精巧，分成两个部分， 一部分是提示音本身的data， 一部分是提示音的控制脚本scp，data是很小的语音单元， 比如“电话”  “取消”是两条单独的语音数据。 通过脚本可以组合出，“电话取消”四个字的语音数据。
+ 语音提示支持中文和英文，大小各是26K左右的大小
+ | file name                                               | code size | data size | rodata size |
+ | .\source\DRIVER\AudioControl_1520HW.obj                 |     1,877 |         0 |           0 |
+ | .\output\AB1520S\Release_Flash\Audio_MailBox.obj        |     1,145 |        24 |         312 |
+ | .\output\AB1520S\Release_Flash\AudioControl.obj         |       647 |        28 |           0 |
+ | .\output\AB1520S\Release_Flash\AudioControl_1520.obj    |     2,498 |         0 |          16 |
+ | .\output\AB1520S\Release_Flash\voice_prompt_ctl.obj     |         0 |         0 |         741 |
+ | .\output\AB1520S\Release_Flash\voice_prompt_data_1.obj  |         0 |         0 |      27,316 |
+ | .\output\AB1520S\Release_Flash\voice_prompt_data_2.obj  |         0 |         0 |      26,836 |
+ | .\output\AB1520S\Release_Flash\voice_command_ctl.obj    |         0 |         0 |           0 |
+ | .\output\AB1520S\Release_Flash\voice_command_data_1.obj |         0 |         0 |           0 |
+ | .\output\AB1520S\Release_Flash\voice_command_data_2.obj |         0 |         0 |           0 |
+ | .\output\AB1520S\Release_Flash\VoicePrompt.obj          |     2,037 |         5 |          78 |
+ | .\output\AB1520S\Release_Flash\VoiceCommand.obj         |         0 |         0 |           0 |
++ Driver
+  开源，
+  使用不开源部分的驱动来处理MMI层发送的消息，相当于一个驱动适配层
+  | file name                                      | code size | data size | rodata size |
+  | .\output\AB1520S\Release_Flash\Driver_FM.obj   | 1,391     |         2 |           0 |
+  | .\output\AB1520S\Release_Flash\Driver_Key.obj  | 2,469     |        51 |           0 |
+  | .\output\AB1520S\Release_Flash\Driver_Temp.obj | 951       |        22 |           0 |
+  | .\output\AB1520S\Release_Flash\Driver_LED.obj  | 3,354     |        72 |           0 |
+  | .\output\AB1520S\Release_Flash\DRIVER.obj      | 5,220     |       138 |         271 |
+  | .\output\AB1520S\Release_Flash\DRIVER_1520.obj | 3,886     |        10 |         180 |
+***** 核心协议栈
+不开源
+实现蓝牙协议的核心层
+| file name |code size|data size|rodata size| overlay-data-size|
+| .\source\L2CAP\L2CAP.obj |1,383 |330 |0 |0|
+| .\source\L2CAP\L2CAP_low_energy.obj |0 |0 |0 |0|
+| .\source\L2CAP\L2CAP_resource_manager.obj |1,953 |50 |0 |0|
+| .\source\L2CAP\L2CAP_signaling.obj |3,337 |0 |506 |0|
+| .\source\GAP\GAP.obj |2,284 |25 |0 |0|
+| .\source\SDAP\SDAP.obj |6,484 |98 |55 |0|
+***** 蓝牙profile
+蓝牙耳机相关的profile的实现
+| A2DP        |      9754 |       136 |         164 |
+| AVRCP       |      4673 |        44 |      184834 |
+| RFCOMM      |      6643 |       146 |         274 |
+| AVCTP       |      1409 |        44 |          18 |
+| AVDTP       |      2978 |        26 |          18 |
+  A2DP HFP 和 AVRCP部分开源
+| file name                                             | code size | data size | rodata size |
+| .\output\AB1520S\Release_Flash\A2DP.obj               | 2,588     |       124 |          88 |
+| .\output\AB1520S\Release_Flash\A2DP_MediaChannel.obj  | 1,152     |         0 |           0 |
+| .\output\AB1520S\Release_Flash\A2DP_SignalChannel.obj | 6,014     |         0 |           0 |
+| .\output\AB1520S\Release_Flash\A2DP_ServiceRecord.obj | 0         |        12 |          76 |
+| .\output\AB1520S\Release_Flash\HFP.obj                | 857       |        76 |          54 |
+| .\output\AB1520S\Release_Flash\HFP_Core.obj           | 6,393     |         0 |       1,063 |
+| .\output\AB1520S\Release_Flash\HFP_ServiceRecord.obj  | 0         |        18 |         571 |
+AVCTP AVDTP RFCOMM等协议不开源
+| file name                                              | code size | data size | rodata size |
+| .\source\AVCTP\AVCTP.obj                               | 1,409     |        44 |          18 |
+| .\output\AB1520S\Release_Flash\AVRCP.obj               | 4,673     |        32 |         157 |
+| .\output\AB1520S\Release_Flash\AVRCP_ServiceRecord.obj | 0         |        12 |     184,677 |
+| .\source\RFCOMM\RFCOMM.obj                             | 2,459     |       146 |          18 |
+| .\source\RFCOMM\rfcomm_crc.obj                         | 44        |         0 |         256 |
+| .\source\RFCOMM\rfcomm_frame.obj                       | 4,140     |         0 |           0 |
+***** Patch
+patch基本都是汇编写的， 不是简单的替换整个函数的方式，而是尽量复用ROM中的代码，采用汇编的方式修改部分变量，寄存器和流程的方式。
+
+patch根据实际的需要，有的是放在nor flash上执行的， 比如如下例子， 有的是放在ram中的。
+
+一个patch的例子：
+
+?EP?P003_f1_0xFF1944?P003 SEGMENT 'ECODE_FLASH'
+PUBLIC P003_f1_0xFF1944??
+RSEG ?EP?P003_f1_0xFF1944?P003	;program segment
+
+P003_f1_0xFF1944??:
+DB		0x44, 0x19, 0xFF
+DB		0
+EJMP	P003_f1_patch
+
+P003_f1_patch:
+
+MOV      0x80, #0xFF
+MOV          A, #0x03
+MOV      R7,R11
+MOVZ     WR6,R7
+XRL      WR4,WR4
+DEC      DR4,#0x01
+ECALL    0xFFEA41  //LC_TIMER_GetExpiredTime
+//MOV      0x8052,DR4
+MOV      A,R4
+MOV         DPTR, #0x8052
+MOVX      @DPTR,A
+P003_f1_patch_01:
+//MOV      DR4,0x8052
+MOV         DPTR, #0x8052
+MOVX      A,@DPTR
+MOV      R4,A
+ECALL    0xFFE8EC //LC_TIMER_IsExpired
+JZ       P003_f1_patch_01
+SETB     0xF8.6
+MOV      0x80, #0x00
+EJMP     0xFF194B
+
+| .\output\AB1520S\Release_Flash\AB1520_Patch.obj |859 |2 |0 |0|
+***** ROM代码
+ROM代码总共有90多K，主要功能包括：
++ GPIO驱动
++ PMU驱动
++ SPI flash驱动
++ 旺宏的nor flash驱动
++ TIMER
++ ADC0驱动
++ ADC1驱动
++ 蓝牙时钟
++ UART驱动
++ DMA驱动
++ OS的代码
++ FHS包的处理
++ 链路调度
++ 链路管理的蓝牙时钟，寻呼，查询等底层功能
++ LE的广播和通道管理
++ 链路控制，sniffer，主从切换等
++ HCI传输
++ H4协议支持
++ H5协议支持
++ 测试模式
++ 固件升级接口
+
+*** 任务模型
+看来起应该是是一个多任务的操作系统， 这部分不开源，但从os_task.h的头文件来看， 应该是一个简单的多任务系统，代码大小从map表上看大概6K左右，
+主要的功能有：
++ 任务管理
++ 内存分配
++ 消息队列
++ Timer管理
+没有更丰富的操作系统功能，比如优先级， 信号量等。
+
+系统总共定义了5个任务， 如下：
+#define TASKENTRY_KERNEL	TASKDEFINE( Kernel )
+#define TASKENTRY_LM		TASKDEFINE( LM )
+#define TASKENTRY_HC		TASKDEFINE( HC )
+#define TASKENTRY_MMI		TASKDEFINE( MMI )
+#define TASKENTRY_DRIVER	TASKDEFINE( DRIVER )
+
+其中:
+HC  Kernel  LM都是不开源的，
+**** 任务概览
+***** HC
+上层profile和底层应该仍然使用了hci层来接口。  主要是HCI层命令和扩展命令处理
+***** LM
+链路层协议处理，包含LMP， AFH，加密key，配对，sniff模式，连接建立(acl sco esco)，电源管理等功能。
+***** DRIVER
+处理MMI层发送给驱动的消息并调用相应驱动， 处理FM ，timer等驱动时间。
+#+BEGIN_SRC C
+DRIVER
+         DRIVER_ProcMmiCmd();
+         DRIVER_FM_Handler();
+         DRIVER_Key_Polling();
+         DRIVER_MailBoxHandler();
+         DRIVER_RingtoneVPFMCmdScheduler();
+         DRIVER_CheckTimer();
+         DRIVER_CheckPwrKey();
+         DRIVER_MuteUnMuteAmpOpenCloseHandler();
+         DRIVER_CheckA2DPMusicStartAnchor();
+         DRIVER_LED_Scheduler();
+         LED_CheckTimer();
+         DRIVER_TEMP_Check();
+         DemoSound_Polling();
+#+END_SRC
+***** MMI
+
+MMI是蓝牙产品中的应用逻辑层，处理蓝牙协议相关需要用户处理的事件，除了蓝牙协议相关处理外，还有其他的使用驱动的适配层。
+#+BEGIN_SRC C
+   MMI
+     GAP
+     L2CAP();
+     MMI_InterruptDebug();
+     GAP_TestCaseGeneration();
+     MMI_HCI_Handler();
+     MMI_PROTOCOL_EventHandler();
+     MMI_ProfileHandle();
+     MMI_AVRCP_Handle();
+     MMI_MusicYouCanSeeHandler();
+     MMI_DRV_EventHandler();
+     MMI_MediaEventHandler();
+     MMI_EEPROMUpdateHandler();
+     MMI_SECTOR_SaveData(SAVE_DATA_TYPE_RUNTIME);
+     MMI_PollingBatStatus();
+     MMI_ConnectableToConDiscoveable();
+     MMI_CheckTimer();
+     OLED_CheckTimer();
+     MMI_LineIn_EncodedDataHandler();
+     GAP_TestCaseGeneration();
+#+END_SRC
+
+***** Kernel
+OS本身任务入口，应该是处理系统相关的一些事件的。
+**** 按键处理
+在1520s中总共定义了13个物理按键，13个物理按键在不同的蓝牙场景会被映射成统一编码的keycode。同一个按键在不同的蓝牙服务存在的时候会是不同的keycode。
+
+按键处理是在DRIVER这个任务中进行按键查询，在DRIVER_Key_Polling获取按键的扫描码并做好去抖，长按处理。MMI_DRV_KeyParser会根据当前活跃的蓝牙服务，把扫描码映射成统一的keycode。
+
+MMI_DRV_KeyEventHandler根据keycode来调用不同的按键处理函数， 具体流程如下：
+
+#+BEGIN_SRC C
+DRIVER
+     DRIVER_Key_Polling(void)
+       KeypadScanKeyDebounce(&gDriver_Key_Ctl.currKeyBitmap))
+       DRIVER_Key_SendEvent(scanInd, KEY_UP);
+       gMMI_Drv_Handler.fDriverKeyEvent(keyIndex, keyAction);
+       MMI_DRV_KEY_Event(KeyIndex keyIndex, U8 keyAction)
+         keyEventCode= MMI_DRV_KeyParser(keyIndex, keyAction);
+           gMMI_ctl.driverCtl.keyDownState = MMI_GetTopStateByLink(gMMI_ctl.serviceInd);
+         MMI_DRV_KeyHandler(U8 keyEventCode)
+           MMI_DRV_KeyEventHandler(gMMI_ctl.serviceInd, keyEventCode);
+
+DRV_KeyEventHandler
+     case SYSTEM_KEY_EVENT:
+       MMI_DRV_ProcessKeyEvent(linkIndex, index);
+               MMI_DRV_KeyVoiceUp
+                 MMI_DRV_VoiceAdjustment(linkIndex, KEY_VOICEUP);
+                   MMI_A2DP_VolumeControl(linkIndex, isVolumeUp);
+                     MMI_A2DP_SendDriverVolCmd(*spkSoundLevelPtr,
+                       OSMQ_Put(OSMQ_DRIVER_Command_ptr,
+     case HFP_KEY_EVENT:
+       MMI_HFP_ProcessKeyEvent(linkIndex, index);
+     case AVRCP_KEY_EVENT:
+       MMI_AVRCP_ProcessKeyEvent(linkIndex, index);
+     case FM_KEY_EVENT:
+       MMI_FM_ProcessKeyEvent(linkIndex, index);
+     case LINE_IN_KEY_EVENT:
+       MMI_LineIn_ProcessKeyEvent(linkIndex, index);
+#+END_SRC
+
+**** 任务间通讯
+在不同任务间，以及在不用的功能模块间，使用消息队里的方式进行通信， 比如如下序列：
++ GAP运行在MMI任务中，通过OSMQ_GAP_Event_To_MMI_ptr队列发送消息给MMI，
++ MMI在MMI_HCI_Handler获取消息，处理完成后通过MMI_HCI_SendCmd发送到OSMQ_HCIDRV_Command_From_GAP_ptr消息队列中，后者是通过总线发送给HC模块
+
+#+BEGIN_SRC C
+   MMI_HCI_Handler();
+       OSMQ_Get (OSMQ_GAP_Event_To_MMI_ptr)) != (MMIMsgType XDATA_PTR)NULL)
+       switch (msgPtr->eventCode)
+       case HCI_EVENT_CONNECTION_REQUEST:
+       MMI_HCI_ConnectionReq(msgPtr);
+         case LINK_TYPE_ACL_CONNECTION_REQUEST:
+         linkIndex = MMI_GetEmptyLinkIndex((U8 XDATA_PTR)&msgPtr->msgBodyPtr.hciEvt.connRequestEvt.BdAddr, FALSE)) < MAX_MULTI_POINT_NO )
+         msgPtr->msgOpcode = HCI_CMD_ACCEPT_CONNECTION_REQUEST;
+         MMI_HCI_SendCmd(msgPtr);
+           OSMQ_Put (OSMQ_HCIDRV_Command_From_GAP_ptr, (U8 XDATA_PTR)msgPtr);
+#+END_SRC
+
+系统中使用的消息队列如下：
+#+BEGIN_SRC C
+    //- Input Queue of Kerner Task
+    OSMQ OSMQ_HCI_ACL_Data_To_Host[NUM_OF_SUPPORTED_ACL_LINK];
+    OSMQ OSMQ_HCI_Event_To_Host;
+    OSMQ OSMQ_HCI_Event_To_Xport;
+    //- Input Queue of HC Task
+    OSMQ OSMQ_HCI_Command_From_Host;
+    OSMQ OSMQ_HCI_Command_To_LC[NUM_OF_SUPPORTED_ACL_LINK];
+    //- Input Queue of LM/LL Task
+    OSMQ OSMQ_HCI_Command_Relay_To_LM[NUM_OF_SUPPORTED_ACL_LINK];
+    OSMQ OSMQ_LMP_Data_To_LM[NUM_OF_SUPPORTED_ACL_LINK];
+    #if (LE_SUPPORTED_CONTROLLER)
+    OSMQ OSMQ_HCI_Command_To_LL;
+    #endif
+    //- Input Queue of LC
+    OSMQ OSMQ_HCI_ACL_Data_From_Host[NUM_OF_SUPPORTED_ACL_LINK];    /* PDU from Host */
+    OSMQ OSMQ_LMP_Data_From_LM[NUM_OF_SUPPORTED_ACL_LINK];
+    OSMQ OSMQ_HCI_BC_Data_From_Host;
+    //- BC
+    OSMQ OSMQ_HC_BC_Data_From_Bus;
+    OSMQ OSMQ_code;
+    OSMQ OSMQ_I2C_SPI_IssueBuffer;
+    //- HC
+    OSMQ OSMQ_HC_Event_To_Bus;
+    OSMQ OSMQ_HC_Data_To_UART;
+    OSMQ OSMQ_HC_Command_From_Bus;
+    OSMQ OSMQ_HC_Event_To_UART;
+    //- NEW HC
+    OSMQ OSMQ_NHC_Event_To_Bus;
+    OSMQ OSMQ_NHC_Data_To_Bus;
+    OSMQ OSMQ_NHC_Data_From_Bus[MAX_NUM_ACL_LINK];
+    OSMQ OSMQ_NHC_Command_From_Bus;
+    OSMQ OSMQ_NHC_Command_From_UART;
+    OSMQ OSMQ_UART_TX_Data;
+    //- LC
+    #ifdef INQUIRY_SUPPORT
+    OSMQ OSMQ_LC_Inquiry_Command_From_LM;
+    OSMQ OSMQ_LC_Inquiry_Event_To_LM;
+    #endif
+    OSMQ OSMQ_LC_Page_Command_From_LM;
+    OSMQ OSMQ_LC_Page_Event_To_LM;
+    OSMQ OSMQ_LC_PageScan_Event_To_LM;
+    //- LM
+    OSMQ OSMQ_HC_CmdRsp;
+    OSMQ OSMQ_HC_Rsp_By_Link[MAX_NUM_ACL_LINK];
+    OSMQ OSMQ_HC_Cmd_By_Link[MAX_NUM_ACL_LINK];
+    OSMQ OSMQ_LM_Event_To_HC;
+    OSMQ OSMQ_LM_BCData_To_HC;
+    OSMQ OSMQ_LM_Normal_Pdu[MAX_NUM_ACL_LINK];
+    //- BC
+    OSMQ OSMQ_LC_BCData_From_LM_HC;
+    OSMQ OSMQ_LC_BCData_Completed_To_LM_HC;
+    //- LC
+    OSMQ OSMQ_LC_Data_From_LM[MAX_NUM_ACL_LINK];
+    OSMQ OSMQ_LC_Data_From_HC[MAX_NUM_ACL_LINK];
+    OSMQ OSMQ_LC_Command_From_LM[MAX_NUM_ACL_LINK];
+    OSMQ OSMQ_LC_Event_To_LM[MAX_NUM_ACL_LINK];
+    OSMQ OSMQ_LC_Data_To_LM[MAX_NUM_ACL_LINK];
+    OSMQ OSMQ_LC_Data_To_HC[MAX_NUM_ACL_LINK];
+    OSMQ OSMQ_LC_Completed_Data_To_HC[MAX_NUM_ACL_LINK];
+    OSMQ OSMQ_LC_Recycle_Data_To_HC[MAX_NUM_ACL_LINK];
+    OSMQ OSMQ_LC_Command_From_HC[MAX_NUM_ACL_LINK];
+    OSMQ OSMQ_LC_Event_To_HC[MAX_NUM_ACL_LINK];
+    OSMQ OSMQ_LC_Ack_To_LM[MAX_NUM_ACL_LINK];
+    OSMQ OSMQ_LC_Data_From_HC_TEMP_NON_AUTO_FLUSH[MAX_NUM_ACL_LINK];
+    // HCI
+    OSMQ OSMQ_HCIDRV_Data_From_Bus[MAX_MULTI_POINT_NO];
+    // GAP
+    OSMQ OSMQ_GAP_Command_From_PROFILE;
+    OSMQ OSMQ_GAP_Event_To_MMI;
+    #ifdef LE_SUPPORTED_HOST
+    OSMQ OSMQ_GAP_Event_To_MMILE;
+    #endif
+    OSMQ OSMQ_LC_Cmd_from_LL;
+    OSMQ OSMQ_LC_Data_from_LL[MAX_NUM_LE_LINK];
+    OSMQ OSMQ_LC_Ack_To_LL[MAX_NUM_LE_LINK];
+    OSMQ OSMQ_LC_Event_To_LL;
+    OSMQ OSMQ_LC_Data_To_LL[MAX_NUM_LE_LINK];
+    OSMQ OSMQ_LC_LE_Event_To_HC;
+    OSMQ OSMQ_LL_Event_To_HC;
+    OSMQ OSMQ_HC_Command_To_LL;
+    OSMQ OSMQ_HC_Cmd_By_Link_To_LL[MAX_NUM_LE_LINK];
+    OSMQ OSMQ_LC_LE_Data_To_HC[MAX_NUM_LE_LINK];
+    OSMQ OSMQ_HC_LE_Data_From_Bus[MAX_NUM_LE_LINK];
+    OSMQ OSMQ_HC_FlashData_From_UART;
+    OSMQ OSMQ_HC_FlashData_To_UART;
+    OSMQ OSMQ_NHC_LE_Data_From_Bus[MAX_NUM_LE_LINK];
+    #ifdef HID_SOC
+    OSMQ OSMQ_MCU_DATA_IN;
+    OSMQ OSMQ_MCU_DATA_OUT;
+    #endif
+    /* For FEA_NEW_CONNHDL */
+    OSMQ OSMQ_LM_Free_Link;
+    OSMQ OSMQ_LM_Used_Link;
+} ALIGN_OSMQ_STRU;
+#+END_SRC
+
+**** DSP
+语音提示，语音命令，解码等都是通过dsp来完成的， mcu和dsp之间是通过一个mailbox来进行交互的。
+***** DSP的配置信息
+DSP的功能参数配置， 音箱的定义在 "..\DSP\AB1520S_DSP\DSP_PARA_AB1520S_MUSICBOX_TARGET.txt"文件中，主要包含如下内容：
+4路AEC的配置 AEC/NR/AVC， 接收和发送的噪声消除   VAD的配置， 双mic的配置，接收和发送的音效设置，还有一些PLC， PEQ等配置，以及不太看明白的其他配置。
+
+***** MCU和DSP的交互
+
+在mailbox的数据结构中，有两部分，一部分是mcu给dsp的命令， 另外一部分是dsp给mcu的事件响应。
+每一个数据结构都有 rw_word来表明当前控制权在mcu还是dsp， 当rw_word为MCU_Owned的时候，mcu才能操作对应的数据结构，mcu操作完数据结构后，把rw_word设置为DSP_Owned，然后通过设置一个特殊寄存器（FBOFFS_WO_DSP_INT_CTL）启动DSP
+
+具体数据结构如下:
+#+BEGIN_SRC C
+typedef struct                //two mailbox structure include M2D & D2M
+{
+        M2D_CTL_STRU m2d_ctl;
+        D2M_CTL_STRU d2m_ctl;
+} MAILBOX_CTL_STRU;
+
+typedef struct d2m_ctl_s
+{
+        volatile U16 rw_word;
+        D2M_EVT_STRU evt_word;
+}D2M_CTL_STRU;
+
+typedef struct
+{
+        volatile U16  rw_word;
+    U16 task;
+        M2D_CMD_STRU  cmd;
+        M2D_PARA_STRU para;
+}M2D_CTL_STRU;
+
+
+VFUN CODE Mailbox_EVENTCB_Handler[] =
+{
+        CMD_REPLY_EvtHandler,
+        VP_END_EvtHandler,
+        RT_END_EvtHandler,
+    VC_END_EvtHandler
+};
+#+END_SRC
+***** 语音命令的实现流程
+sdk中是支持语音命令的，接打电话，语音拨号，以及配对等看到的如下：
+VC_DATA_DEFINE	(PAIRING)
+VC_DATA_DEFINE	(CHECK_STATUS)
+VC_DATA_DEFINE	(MAKE_A_CALL)
+VC_DATA_DEFINE	(BATTERY_LEVEL)
+VC_DATA_DEFINE	(CHECK_BATTERY)
+VC_DATA_DEFINE	(CONNECTION_STATUS)
+VC_DATA_DEFINE	(LAST_CALL_OUT)
+VC_DATA_DEFINE	(VOICE_DIAL)
+VC_DATA_DEFINE	(RING_BACK)
+VC_DATA_DEFINE	(WHAT_CAN_I_SAY)
+VC_DATA_DEFINE	(TAKE_THE_CALL)
+VC_DATA_DEFINE	(REJECT)
+VC_DATA_DEFINE	(CANCEL)
+
+****** 主要工作流程
+
++ VoiceCommand_Start通过mailbox开始启动DSP进入命令监听状态
++ MailBox_EvtHandler在接收到有效的命令后，会通过mailbox发送识别结果
++ Driver_MailBoxOgfVCEvtHandle来处理语音命令结果
+  根据语音结果，做相应处理，比如停止掉音乐，并把有效的结果根据当前跑的协议的上下文，转换成一个按键事件， 最后调用MMI_DRV_KeyEventHandler来处理该按键事件
++ 按键事件处理中，完成对应的蓝牙协议的控制动作
+
+  具体代码流程如下：
+#+BEGIN_SRC C
+VoiceCommand_Start
+  DRIVER_SendCmdToMailBox
+    MailBox_CmdHandler
+       while(gAlignDSP.Mailbox.m2d_ctl.rw_word == DSP_Owned){}
+       Mailbox_StateHandler[CMD_PTR->m2d_ctl.cmd.Ogf][CMD_PTR->m2d_ctl.cmd.Ocf] (CMD_PTR);
+       PromptStart_SubStateHandler,
+           DSP_Enable(CMD_PTR->m2d_ctl.para.dsp_gain_para.DspClock);
+           MailBox_State[CMD_PTR->m2d_ctl.cmd.Ogf].CmdPtr = CMD_PTR;
+           gAlignDSP.Mailbox.m2d_ctl.rw_word = DSP_Owned;
+           HC_SFR_WRITE_BY_FB (FBOFFS_WO_DSP_INT_CTL,0x8);
+
+MailBox_EvtHandler
+   Mailbox_EVENTCB_Handler[gAlignDSP.Mailbox.d2m_ctl.evt_word.Evt-EVT_CODE] ();
+   VC_END_EvtHandler
+       gVC_ctl.result = gAlignDSP.Mailbox.d2m_ctl.evt_word.para.vc_evt_para.vc_result;
+       MailboxSendEvtToDriver(EVT_PTR, OGF_VC, OCF_VC_STOP);
+         DRIVER_ProcMailboxEvent((U8 XDATA_PTR)EVT_PTR);
+           OSMQ_Put(&Driver_MailBox_Evt, (U8 XDATA_PTR)msgPtr);
+
+DRIVER
+   DRIVER_MailBoxHandler();
+     Driver_MailBoxOgfVCEvtHandle, //OGF_VC,
+       DRIVER_SetGainAndMute(TARGET_NONE);
+       VoiceCommand_Stopped();
+         AUDIO_SetAudioOff (AUDIO_VOICECOMMAND);
+         DRIVER_VoiceCommandOffCallback();
+           matchedNo = VoiceCommand_GetEvtIndex(gVC_ctl.result);
+         gVC_ctl.vcnextLayer = VoiceCommand_VCLayer(matchedNo);
+           DRIVER_SendVoiceCommandEndedEvent(gDriver_ctl.playingRingtoneId,
+              MMI_DRV_VoiceCommandEnd_Event,//fDriverVoiceCmdEndEvent
+                 keyEventCode =
+                 MMI_DRV_LookUpKeyMapTable((VoiceCommand_GetActionTable
+                 MMI_DRV_VoiceCommand_ResultProcessed(keyEventCode);
+                    MMI_DRV_KeyEventHandler(gMMI_ctl.serviceInd, (U8)keyEventCode);
+#+END_SRC
+*** profile开发
+在ab1520S中，底层的核心协议是不开源的， A2DP和AVRCP等和应用层配合比较紧密的协议是开源的。
+
+对每个profile都使用一个MMI_PROFILE_DESC来描述， 在该描述中提供如下信息，profile的任务入口函数， 建立链接的回调，断开连接的回调，以及链接建立后，在链接上的事件和数据回调。
+
+在profile需要的资源初始化后， 就通过SDAP_RegisterServiceRecord注册服务信息到服务发现协议中，这样在对方扫描的时候就可以发现该服务。
+
+最后通过MMI_RegisterProfile把上层profile注册到profile管理系统中。这样通用的profile对应的链接建立，和断开等l2cap所需要的功能就可以被蓝牙协议栈管理了。
+
+当一个profile的链接建立以后，其对应的PROFILE_TASK_FUNC就会在MMI任务中被调用
+#+BEGIN_SRC C
+        struct stMmiProfileDesc
+        {
+                U8 profileId;
+                PROFILE_TASK_FUNC			ProfileTaskFunc;
+                PROFILE_CONNECT_REQUEST		ProfileConnectRequest;
+                PROFILE_DISCONNECT_REQUEST	ProfileDisconnectRequest;
+                PROFILE_LINK_EVENT			ProfileLinkEvent;
+                PROFILE_DATA_EVENT			ProfileDataEvent;
+        };
+#+END_SRC
+**** A2DP profile的例子
+A2DP的profile
+#+BEGIN_SRC C
+static AVDTP_PROFILE_DESC CODE gA2DP_ProfileDesc = {
+        { // MMI_PROFILE_DESC
+                PROFILE_A2DP,
+                A2DP,					//ProfileTaskFunc
+                A2DP_ConnectRequest,	//ProfileConnectRequest
+                A2DP_DisconnectRequest,	//ProfileDisconnectRequest
+                A2DP_Signal_LinkEvent,	//ProfileLinkEvent
+                A2DP_Signal_DataEvent,	//ProfileDataEvent
+        },
+        A2DP_Media_LinkEvent,	//MediaLinkEvent
+        A2DP_Media_DataEvent,	//MediaDataEvent
+};
+
+A2DP_Init
+     _InitMediaCodec();
+     SDAP_RegisterServiceRecord(&gA2DP_SinkServiceNode);
+     MMI_RegisterProfile(&gA2DP_ProfileNode);
+
+A2DP
+     A2DP_SignalHandler(linkIndex);
+       eventPtr = OSMQ_Get(&a2dpLinkInfo->OSMQ_AVDTP_Signal_To_A2DP);
+       case AVDTP_COMMAND_MSG:
+         A2DP_SignalCommandHandler(linkIndex, eventPtr);
+     A2DP_CheckTimer(linkIndex);
+
+#+END_SRC
+*** SDK编译可配置
+sdk中不同的功能，profile可以使用编译宏的方式来配置， 主要在bt_config_profile.h中， 比如音箱的相关配置如下：
+#+BEGIN_SRC C
+#ifdef STEREO_SOC
+        #define DSP_ENABLE
+        #define AUDIO_BIST
+        //#define LIGHTING_ENABLE
+        #define FM_ENABLE
+        #ifdef TWS_SETTINGS
+                /* ======= device type =======  */
+                        #define AIR_MODULE
+                        #define PRODUCT_TYPE_A
+                /* ======= drivers type =======  */
+                        //#define BUZZER_ENABLE
+                        #define RINGTONE_ENABLE
+                        #define SUPPORT_VOICE_PROMPT
+                        #define LINEIN_ENABLE
+                        #define PEQ_ENABLE
+                        //#define DUAL_MIC_ENABLE
+                /* ======= 3.0 Profiles =======  */
+                        #define SPP_Profile
+                        #define A2DP_Profile
+                        #define AVRCP_Profile
+                        #define HFP_Profile
+                        #define AIRAPP_Profile
+                        //#define LCIF_Profile
+                        //#define IAP2_Profile
+                        //#define OPP_Profile
+                        //#define SAP_Profile
+                        //#define PBAP_Profile
+                        //#define MAP_Profile
+                /* ======= 4.0 LE       =======  */
+            #ifdef LE_SUPPORTED_HOST_FLASH
+                        #define MMI_LE_ENABLE
+                        #define MMI_LE_APP_ENABLE
+                        #define MMI_LE_ENABLE_ADV
+                #define SUPPORT_STATIC_RANDOM_ADDRESS
+        #endif
+#+END_SRC
+*** Flash上的配置信息
+**** 配置信息的定义
+配置信息的结构都是类似的方式：
+比如config0的配置：
+| .\output\AB1520S\Release_Flash\sector_config0_header.obj |0 |0 |48 |0|
+802100    48 OBJECT   LOCAL  gSectorConfig0Header
+中定义类一个48字节的配置信息
+
+在源码中 AB1520S_SVN72747_Headset_OBJ/source/SECTOR/sector_config0_header.c中，会有如下代码：
+#pragma userclass (HCONST = CFGHEAD) 指定该文件的数据放到如下段中
+| 802100H   | 8022FFH   | 0001D4H   | HCONST_CFGHEAD      |
+
+在文件后面会定义放到该段中的数据，通过c文件包含头文件的方式定义：
+#+BEGIN_SRC C
+SECTOR_CFG0_HEADER_STRU CODE gSectorConfig0Header =
+{
+    NUM_OF_SECTOR_CFG0,
+
+    {
+            #include "sector_config0_member.h"
+        },
+
+        //- CRC
+        {0x2E,0xFE}
+};
+#+END_SRC
+在包含的sector_config0_member.h中有如下定义
+SECTORS_ENUM_MACRO(SECTOR_AFE_INIT, &gSector_AfeInit, sizeof(AFE_INIT_STRU), CRC_CHK)
+表示：
+SECTOR_AFE_INIT(802100H) 是gSector_AfeInit指定的ic内部寄存器的值
+
+gSector_AfeInit则定义在AB1520S_SVN72747_Headset_OBJ/source/SECTOR/Config0/sector_afe_init.c中，具体如下， 在同一目录下，定义了gSector_SfrInit gSector_RfMiscCtl gSector_HwMiscCtl。
+
+如下为gSector_AfeInit的定义片段， 每一项是三个byte， 第一个byte是寄存器地址，2，3是寄存器的值。c251是16bit的寄存器
+#+BEGIN_SRC C
+#elif (defined OPERATION_IN_RF_AB1520S)
+SECTOR_AFE_INIT_STRU CODE gSector_AfeInit =
+{
+        {
+            169, //NumOfAfeRegInit
+
+            {
+                                  //- MCU clock source=48M
+                        {0x00, 0x99, 0x81},//1
+                        {0x01, 0x00, 0x00},
+                        {0x02, 0xDD, 0x2F},
+                        {0x03, 0x55, 0x01},
+                        {0x04, 0x21, 0x45},  //{0x04, 0x21, 0x65},  CML workaround for LO spur !!!
+#+END_SRC
+*** 总结
+**** 基本情况
++ 内存部分
+  0x8000~0x9607 共5639字节ROM和闭源部分使用的全局内存，其中还包含一些在ram中的patch代码，
+  0xf000 开始的3690字节的内存，存放的主要是不开源部分，在flash上的代码使用的全局内存，比如充电，温度，fm以及蓝牙链路管理的一些数据结构。
+  0x9607 开始的3584字节 开始的部分主要就是开源部分使用的内存，包括MMI，驱动，以及profile等。
+  剩下的大约19k的内存，用作全局的heap， heap是按照多个pool管理的，
+  一个典型的具体配置如下：
+  | pool名称             | 大小（项数x大小） |
+  | CallArrayEntries     | 16 * 4            |
+  | TimerArrayEntries    | 50 * 4            |
+  | OSMEM1ArrayEnties    | 40 *50            |
+  | OSMEM2SmallTxEntries | 9 * 702           |
+  | OSMEM2TinyRxEntries  | 3 * 62            |
+  | OSMEM2SmallRxEntries | 3 * 1100          |
+  | OSMEM2LargeRxEntries | 2 * 1100          |
+  | UartDmaRxBufSize     | 380               |
++ Flash部分
+  固化了1M的nor， 总共用了551,663字节， 其中代码289,118， DSP的代码是168，354，剩下的注释配置数据， 其中语音提示音配置数据54,893，包含了中英文， 一种语言的话大概27K
++ ROM部分
+  从FE8000开始的96k是rom，大部分（75K左右）是蓝牙的链路控制（LC），主机控制（HC），以及链路控制切换（LCS），剩下的一些其他代码，主要是kernel，设备驱动，以及SDK的一些运行环境的代码。
++ DSP
+  语音提示，语音命令，解码等都是通过dsp来完成的， mcu和dsp之间是通过一个mailbox来进行交互的。
+  从DSP的配置文件中可以看到4路AEC的配置 AEC/NR/AVC， 接收和发送的噪声消除   VAD的配置， 双mic的配置，接收和发送的音效设置，还有一些PLC， PEQ等配置，以及不太看明白的其他配置。
+  在SDK中有语音命令的配置数据以及处理流程。
+**** 优点
++ 编译可配置
+  可以做到大部分产品类型的可配置， 在一个sdk中，可以配置出耳机，音箱，soundbar等多种产品形态，tws，ble以及各个蓝牙profile都可以单独配置
++ 提供了非常丰富的运行可配置
+  闭源的部分，都是通过可配置的方式完成的，配置信息很全。
++ profile定制比较容易
+  对需要定制行为的profile都是开源的， 并且profile的模块拆分也相对比较独立，比较容易修改
++ 语音命令
+
++ 语音数据使用片段以及片段组合的方式来减少占用nor的大小
+   提示音的定义是比较精巧的，分成两个部分， 一部分是提示音本身的data， 一部分是提示音的控制脚本scp，data是很小的语音单元， 比如“电话”  “取消”是两条单独的语音数据。 通过脚本可以组合出，“电话取消”四个字的语音数据。
+   例子如下：（中文的电话取消的定义）
+   #define VP_SCP_CALL_CANCELLED_C				VPD(CALL), VPD(CANCELLED)
+   890052     2 OBJECT   LOCAL  vp_scp_CALL_CANCELLED_C
+   8915CC   347 OBJECT   LOCAL  vp_dat_CALL_C
+   891C55   422 OBJECT   LOCAL  vp_dat_CANCELLED_C
++ 内存堆管理使用多个预先配置的pool的方式，有如下好处
+  提供了相对通用的内存分配的函数接口， 提高了内存使用率并避免由于内存碎片。
++ 尽量使用了const  data来减少data数据的使用
+  比如L2CAP中一些常见的命令和请求
+  84B025    14 OBJECT   LOCAL  signalling_command_reject
+  84B033    12 OBJECT   LOCAL  signalling_connection_request
+  84B03F    16 OBJECT   LOCAL  signalling_connection_response
+  84B04F    16 OBJECT   LOCAL  signalling_config_req_with_MTU
+
+*** 附录
+**** Flash上详细的配置数据
+***** 配置总的入口
+802000    64 OBJECT   LOCAL  _FlashDescriptor
+这个是总的flash descpritor信息， boot代码读取这个扇区的内容，来填充FLASH_DESCRIPTOR_STRU的结构。
+
+在FLASH_DESCRIPTOR_STRU;定义了各类配信息的头部
+#+BEGIN_SRC C
+typedef struct stru_flash_descriptor
+{
+    VOID (*fFlashInitEntry)(VOID);
+    BOOL (*fSectorsCheckFuncEntry)(VOID);
+    OS_GENERIC_PTR pFlashCodeDescriptor;
+    OS_GENERIC_PTR pSectorHdrConfig0;
+    OS_GENERIC_PTR pSectorHdrConfig1;
+    OS_GENERIC_PTR pSectorHdrDspData;
+    OS_GENERIC_PTR pSectorHdrBoundary;
+    OS_GENERIC_PTR pSectorHdrVoiceData;
+    OS_GENERIC_PTR pSectorHdrRuntime;
+    OS_GENERIC_PTR pSectorHdrToolMisc;
+    U32 McuHcontEnd;
+    OS_GENERIC_PTR pSectorHdrRuntime_1;
+    OS_GENERIC_PTR pSectorHdrRuntime_2;
+    OS_GENERIC_PTR reserved_dw52;
+    OS_GENERIC_PTR reserved_dw56;
+    U16 OtaUpgrateVersion;
+    CRC16 CRC;
+} FLASH_DESCRIPTOR_STRU;
+#+END_SRC
+***** 配置头部
+配置头部是放在如下的存储段中的
+| 802100H   | 8022FFH   | 0001D4H   | HCONST_CFGHEAD      |
+各分类的头部指向，实际的配置信息是存放在如下存储段中的
+| 880000H   | 88FFFFH   | 003DC8H   | HCONST_CONFIG       |
+
+头部信息主要有如下几类
+| .\output\AB1520S\Release_Flash\sector_config0_header.obj |0 |0 |48 |0|
+802100    48 OBJECT   LOCAL  gSectorConfig0Header
+| .\output\AB1520S\Release_Flash\sector_config1_header.obj |0 |0 |219 |0|
+802130   219 OBJECT   LOCAL  gSectorConfig1Header
+| .\output\AB1520S\Release_Flash\sector_boundary_header.obj |0 |0 |48 |0|
+80220B    48 OBJECT   LOCAL  gSectorBoundaryHeader
+| .\output\AB1520S\Release_Flash\sector_voice_data_header.obj |0 |0 |21 |0|
+80223B    21 OBJECT   LOCAL  gSectorVoiceDataHeader
+| .\output\AB1520S\Release_Flash\sector_runtime_header.obj |0 |0 |12 |0|
+802250    12 OBJECT   LOCAL  gSectorRuntimeHeader
+| .\output\AB1520S\Release_Flash\sector_tool_misc_header.obj |0 |0 |21 |0|
+80225C    21 OBJECT   LOCAL  gSectorToolMiscHeader
+| .\output\AB1520S\Release_Flash\sector_dsp_data_header.obj |0 |0 |21 |0|
+802271    21 OBJECT   LOCAL  gSectorDspDataHeader
+| .\output\AB1520S\Release_Flash\sector_merge_runtime_header_1.obj |0 |0 |39 |0|
+802286    39 OBJECT   LOCAL  gSectorRuntimeHeader_1
+| .\output\AB1520S\Release_Flash\sector_merge_runtime_header_2.obj |0 |0 |39 |0|
+8022AD    39 OBJECT   LOCAL  gSectorRuntimeHeader_2
+| .\output\AB1520S\Release_Flash\sector_gap_nvram_type.obj |0 |0 |11 |0|
+****** gSectorConfig0Header
+| .\output\AB1520S\Release_Flash\sector_afe_init.obj |0 |0 |513 |0|
+880E33   513 OBJECT   LOCAL  gSector_AfeInit
+包含了芯片寄存器的初始值
+| .\output\AB1520S\Release_Flash\sector_sfr_init.obj |0 |0 |453 |0|
+881034   453 OBJECT   LOCAL  gSector_SfrInit
+定义了c251特殊寄存器的初始值
+| .\output\AB1520S\Release_Flash\sector_rf_misc_ctl.obj |0 |0 |132 |0|
+8811F9   132 OBJECT   LOCAL  gSector_RfMiscCtl
+配置RF相关的参数
+| .\output\AB1520S\Release_Flash\sector_hw_misc_ctl.obj |0 |0 |15 |0|
+88127D    15 OBJECT   LOCAL  gSector_HwMiscCtl
+RF矫正，电池等硬件杂项配置
+| .\output\AB1520S\Release_Flash\sector_uart_parameter_eng.obj |0 |0 |16 |0|
+881B2E    16 OBJECT   LOCAL  gSector_UartParameterEng
+工程串口配置，波特率，校验位等
+****** gSectorConfig1Header
+| .\output\AB1520S\Release_Flash\sector_sys_local_device_info.obj |0 |0 |52 |0|
+880D70    52 OBJECT   LOCAL  gSector_SysLocalDeviceInfo
+配置蓝牙设备信息，hci信息，设备能力，名称，版本号，参数等
+
+| .\output\AB1520S\Release_Flash\sector_sys_local_device_EIR.obj |0 |0 |54 |0|
+880DA4    54 OBJECT   LOCAL  gSector_SysLocalDeviceEIR
+配置设备的服务能力
+//Service Class UUID
+//- 0x1108: Headset
+//- 0x110B: Audio_Sink
+//- 0x110C: AVRCP Target
+//- 0x110E: AVRCP Control
+//- 0x110F: AVRCP ControlController
+
+| .\output\AB1520S\Release_Flash\sector_sys_local_device_control_type.obj |0 |0 |95 |0|
+880D11    95 OBJECT   LOCAL  gSector_SysLocalDeviceControl
+根据设备类型(soundbar 耳机等)不同配置GPIO， LED显示，电源灯等。
+
+| .\output\AB1520S\Release_Flash\sector_lc_misc_ctl.obj |0 |0 |43 |0|
+8805C9    43 OBJECT   LOCAL  gMISC_ctl_init
+根据设备类型(soundbar 耳机等)，配置master，slave模式sniffer，休眠等参数
+
+| .\output\AB1520S\Release_Flash\sector_lm_parameter_type.obj |0 |0 |6 |0|
+8805F4     6 OBJECT   LOCAL  gSector_LmParameter
+根据设备类型(soundbar 耳机等)，是否支持TWS等，配置Link Manager的参数，
+
+| .\output\AB1520S\Release_Flash\sector_hc_parameter_type.obj |0 |0 |143 |0|
+88053A   143 OBJECT   LOCAL  gHC_parameter_init
+蓝牙扫描，inquiry，page scan，pin类型等链路管理参数
+
+| .\output\AB1520S\Release_Flash\sector_uart_parameter.obj |0 |0 |16 |0|
+880E23    16 OBJECT   LOCAL  gSector_UartParameter
+串口参数配置，是否支持流控，h5等
+
+| .\source\SECTOR\sector_mcu_dsp_parameter_init.obj |0 |0 |22 |0|
+8805FA    22 OBJECT   LOCAL  gMcu_dsp_parameter_init
+未开源，应该是mcu和dsp交互的配置
+
+| .\output\AB1520S\Release_Flash\sector_a2dp_nvram_ctl_type.obj |0 |0 |57 |0|
+880000    57 OBJECT   LOCAL  gA2DP_nvram_ctl_init
+a2dp profile的参数配， sbc和aac code的配置
+
+| .\output\AB1520S\Release_Flash\sector_driver_led_data_type.obj |0 |0 |813 |0|
+880063   813 OBJECT   LOCAL  gDriver_led_data_init
+配置不同工作模式（低电，可连接，链接上等）下LED的闪烁方式
+
+| .\output\AB1520S\Release_Flash\sector_driver_buzzer_data_type.obj |0 |0 |42 |0|
+880039    42 OBJECT   LOCAL  gDriver_buzzer_data_init
+蜂鸣器配置， 频率，长度，次数，重复窗口，重复次数等
+
+| .\output\AB1520S\Release_Flash\sector_driver_ringtone_data_type.obj |0 |0 |426 |0|
+880390     2 OBJECT   LOCAL  gDriver_ringtone_data_init
+定义各种铃声，每个铃声按照如下方式定义
+#define RTDAT_SHORT_1_NOTE_1		NOTE_ME4, METRONOME_1_16_100MS, VOL_BEGIN, VOL_END,
+
+| .\output\AB1520S\Release_Flash\sector_mmi_driver_nvram_backup_type.obj |0 |0 |45 |0|
+880DF0    45 OBJECT   LOCAL  gMMI_Driver_v_nvram_backup
+MMI相关驱动的参数的非零的初始化值。
+
+| .\output\AB1520S\Release_Flash\sector_mmi_nvram_type.obj |0 |0 |1,356 |0|
+8807C5  1356 OBJECT   LOCAL  gMMI_nvram_init
+MMI相关的配置，如下
+#+BEGIN_SRC C
+        typedef struct
+        {
+                PinCodeCtl pinCodeCtl;
+                BuzzCtl buzzCtl[MMI_BUZZER_TRIGGERED_EVT_NO];
+                PageScanWindowSize pageScanWindowSize;
+                ScoPktPara scoPktPara;
+                ChangePktTypePara changePktTypePara;
+                SimplePairingPara simplePairingPara;
+                MMI1IntInterval mmi1IntInterval;
+                MMIBtnSeqInfo mmiBtnSeqInfo[MAX_BTN_SEQ_NO];
+                SniffPara sniffPara;
+                U8 retrySniffCnt;
+                U8 rssiDefaultBoundry;
+                LedSettingType defaultLedSetting[MMI_TOTAL_STATE_NO];
+                LedSettingType maxLinkLedSetting;
+                U8 lineInAutoDetectKeyIndex;
+                KeypadGpioCtl keypadGpioCtl;
+                ProductType productType;
+                AirParaType airPara;
+                U8 maxPageDevice;
+                U8 missedCallRemindAttempt;
+                U8 discoverableIfPdlLessThan;
+                U8 actionAfterPairingModeTimeout;
+                ReConnectInfo reConnectInfo;
+                MMIFeatureCtl mmiFeatureCtl;
+                SpkGainSet spkGainSet[SOUND_LEVEL_NO];
+                MicGainSet micGainSet[SOUND_LEVEL_NO];
+                VgsTable vgsTable[SOUND_LEVEL_NO];
+                SoundLevel soundLevels[SOUND_LEVEL_NO];
+                SoundLevel musicSoundLevels[SOUND_LEVEL_NO];
+                SoundLevel lineInSoundLevels[SOUND_LEVEL_NO];
+                MmiDecreaseVolWhenLowBatType scoDecreaseGainCtl;
+                MmiDecreaseVolWhenLowBatType a2dpDecreaseGainCtl;
+                MmiDecreaseVolWhenLowBatType lineinDecreaseGainCtl;
+                U8 totalSoundLevel;
+                U8 totalMusicSoundLevel;
+                U8 totalLineInSoundLevel;
+                U8 defaultA2DPSoundLevel;
+                U8 reserved5;
+                U8 defaultVCLevel;
+                MMIVolumeSmallStepsType smallStepVolume;
+                MMIPowerOnInLowBatCtlType powerOnLowBatAction;
+                BatteryPara batteryPara;
+                TimerCtl timerCtl;
+                VoicePromptConfig vpConfig;
+                EvtPara evtParaCtl[EVENT_TABLE_SIZE];
+                U8 key1GpioIndex;
+                LedFilterMap ledFilterMap[MAX_LED_FILTER_NO];
+                MMIFCCInfo mmiFCCInfo;
+                U8 storedLinkKeyCnt;
+                U8 gpioAmpGeneral;
+                U8 gpioAmpBtFm;
+                MmiAvrcpSettings mmiAvrcpSettings;
+                U8 mmiHfpCINDMask;
+                U8 fmSeekTH;
+                U32 reserved4[3];
+                U8	audioPriorityExtra[4];
+                TWS_PARA tws_para;
+                AudioPriorityType audioPriority;
+                // *************************** IMPORTANT************************************
+                // flash code version: 001.62971.3204.0
+                // NOTICE - structure definition above matches specified flash code version.
+                //          DO NOT modify it. ONLY APPENDing fields is allowed.
+                // *************************** IMPORTANT************************************
+                PairCtl	pariCtl;
+                U8 roleSwitchCnt;
+                U8 mcuADCSource;
+                U8 enlargedWaitDetachTime;	//unit: 0.5 sec
+                U8 checkA2DPMediaChannelEstTimeActiveConn;//unit:0.1s
+                U32 GENERIC_PTR sbcFlashAddress;
+                U8 reserved6;
+                U8 reserved7;
+                U8 reserved8;
+                U8 reserved9;
+                U8 reserved10;
+        } MMI_NVRAM_TYPE;
+#+END_SRC
+| .\output\AB1520S\Release_Flash\sector_mmi_nvram_keymap.obj |0 |0 |437 |0|
+880610    15 OBJECT   LOCAL  gMMI_nvram_keymap_init
+按键映射表配置， 长按等等
+
+| .\output\AB1520S\Release_Flash\sector_sys_memory_config.obj |0 |0 |22 |0|
+880DDA    22 OBJECT   LOCAL  gSector_SysMemoryConfig
+定义系统的heap的内存分配，根据不同功能来配置不同的系统内存使用， 内存要应该是使用预分配的办法。
+/* CallArrayEntries */          16,
+/* CallArrayEntrySize */        4,
+/* TimerArrayEntries */         50,
+/* TimerArrayEntrySize */       4,
+/* OSMEM1ArrayEnties */         40,
+/* OSMEM1ArrayEntrySize */      50,
+
+| .\output\AB1520S\Release_Flash\sector_sm_nvram_type.obj |0 |0 |6 |0|
+880E1D     6 OBJECT   LOCAL  gSM_nvram_init
+security manager的配置
+
+| .\source\SECTOR\sector_driver_ctl_type.obj |0 |0 |49 |0|
+88128C    11 OBJECT   LOCAL  gGAP_nvram_init
+GAP的蓝牙地址配置
+
+| .\output\AB1520S\Release_Flash\sector_application.obj |0 |0 |10 |0|
+881B24    10 OBJECT   LOCAL  gApplication_init
+应用类型和版本（应该是耳机，soudbar等典型应用吧）
+****** gSectorBoundaryHeader
+| .\output\AB1520S\Release_Flash\sector_mp_parameter.obj |0 |0 |366 |0|
+801000   366 OBJECT   LOCAL  gSector_MpParameter
+量产参数配置， bt qualification， 私钥等
+#+BEGIN_SRC C
+        MP_SYS_LOCAL_DEVICE_INFO_STRU   MP_SysLocalDeviceInfo;
+        MP_AFE_INIT_STRU		MP_AfeInit;
+        MP_SFR_INIT_STRU        MP_SfrInit;
+        MP_RF_MISC_CTL_STRU		MP_RfMiscCtl;
+        MP_BATTERY_PARA_STRU	MP_BatteryPara;
+        MP_ChargerDiscountCtl	MP_ChargerDiscountCtl[CHARGING_EFF_STATE_NO];
+        MP_ADC_FIELD_STRU       MP_AdcField;
+        U8 CalibrationInfo[NUM_OF_CALIBRATION_INFO];
+        U8 ManufacturingInfo[NUM_OF_MANUFACTURING_INFO];
+#+END_SRC
+| .\output\AB1520S\Release_Flash\sector_sys_patch_code_init.obj |0 |0 |136 |0|
+881B3E   136 OBJECT   LOCAL  gSector_SeysPatchCodeInit
+EXTERN SECTOR_MP_PARAMETER_F_STRU CODE gSector_MpParameter_F;
+
+| .\output\AB1520S\Release_Flash\sector_mp_parameter_F.obj |0 |0 |0 |0|
+80116E     0 OBJECT   LOCAL  gSector_MpParameter_F
+保留给用户区的参数配置
+#+BEGIN_SRC C
+typedef struct stru_mp_parameter_f
+{
+        U8 rsvd;
+        MP_AIO_RELATED_FIELD_STRU AioSet[AIO_TOTAL_SET_NUMBER];
+        U8 reserved[90];
+        U8 Customer_Reserved1[15][32];
+        U8 Customer_Reserved2[30];
+    #ifdef LE_SUPPORTED_HOST_FLASH
+        LE_BD_ADDR_TYPE leBDAddr;           //LE BD address
+        #endif
+} MP_PARAMETER_F_STRU;
+#+END_SRC
+****** gSectorVoiceDataHeader
+| .\output\AB1520S\Release_Flash\voice_prompt_ctl.obj | 0 | 0 | 741 | 0 |
+890000    52 OBJECT   LOCAL  gVoiceLangCtl
+890070    68 OBJECT   LOCAL  gVoicePromptScriptOffset_C
+8900B4   212 OBJECT   LOCAL  gVoicePromptDataOffset_C
+8901CD    68 OBJECT   LOCAL  gVoicePromptScriptOffset_E
+890211   212 OBJECT   LOCAL  gVoicePromptDataOffset_E
+提示音的索引，控制数据定义， 提示音的定义是比较精巧的，分成两个部分， 一部分是提示音本身的data， 一部分是提示音的控制脚本scp，
+data是很小的语音单元， 比如“电话”  “取消”是两条单独的语音数据。 通过脚本可以组合出，“电话取消”四个字的语音数据。
+例子如下：（中文的电话取消的定义）
+#define VP_SCP_CALL_CANCELLED_C				VPD(CALL), VPD(CANCELLED)
+890052     2 OBJECT   LOCAL  vp_scp_CALL_CANCELLED_C
+
+| .\output\AB1520S\Release_Flash\voice_prompt_data_1.obj |0 |0 |27,316 |0|
+中文语音数据本身的定义， 典型的单字的数据，比如0~9，电池，蓝牙模式等等
+8902E5   377 OBJECT   LOCAL  vp_dat_0_C
+89045E   377 OBJECT   LOCAL  vp_dat_1_C
+8905D7   362 OBJECT   LOCAL  vp_dat_2_C
+890741   362 OBJECT   LOCAL  vp_dat_3_C
+8908AB   392 OBJECT   LOCAL  vp_dat_4_C
+890A33   377 OBJECT   LOCAL  vp_dat_5_C
+890BAC   362 OBJECT   LOCAL  vp_dat_6_C
+890D16   377 OBJECT   LOCAL  vp_dat_7_C
+890E8F   347 OBJECT   LOCAL  vp_dat_8_C
+890FEA   392 OBJECT   LOCAL  vp_dat_9_C
+891172   302 OBJECT   LOCAL  vp_dat_BATTERY_C
+8912A0   812 OBJECT   LOCAL  vp_dat_BLUETOOTH_MODE_C
+等等
+
+| .\output\AB1520S\Release_Flash\voice_prompt_data_2.obj |0 |0 |26,836 |0|
+英文的语音数据定义， 典型的单字的数据，比如0~9，电池，蓝牙模式等等
+896D99   512 OBJECT   LOCAL  vp_dat_0_E
+896F99   527 OBJECT   LOCAL  vp_dat_1_E
+8971A8   527 OBJECT   LOCAL  vp_dat_2_E
+8973B7   527 OBJECT   LOCAL  vp_dat_3_E
+8975C6   527 OBJECT   LOCAL  vp_dat_4_E
+8977D5   527 OBJECT   LOCAL  vp_dat_5_E
+8979E4   527 OBJECT   LOCAL  vp_dat_6_E
+897BF3   527 OBJECT   LOCAL  vp_dat_7_E
+897E02   527 OBJECT   LOCAL  vp_dat_8_E
+898011   527 OBJECT   LOCAL  vp_dat_9_E
+898220   467 OBJECT   LOCAL  vp_dat_BATTERY_E
+8983F3   542 OBJECT   LOCAL  vp_dat_BLUETOOTH_E
+****** gSectorRuntimeHeader
+| .\source\SECTOR\sector_app_callername_data.obj |0 |0 |1 |0|
+8F8000     1 OBJECT   LOCAL  dummy
+****** gSectorToolMiscHeader
+| .\output\AB1520S\Release_Flash\sector_tool_info.obj |0 |0 |2,089 |0|
+881297  2089 OBJECT   LOCAL  gSector_Tool_Info
+工具版本信息，以及2k大小的dsp参数
+| .\output\AB1520S\Release_Flash\sector_ae_info.obj |0 |0 |51 |0|
+881AC0    51 OBJECT   LOCAL  gSector_AE_Info
+工具配置的AE info
+****** gSectorDspDataHeader
+| .\output\AB1520S\Release_Flash\sector_dsp_func_para.obj |0 |0 |4,094 |0|
+8F6000  4094 OBJECT   LOCAL  gSector_DspFuncParameter
+#+BEGIN_SRC C
+typedef struct
+{
+        DSP_FUNC_PARA_STRU      dsp_param_parameter;
+
+    /* The order of sections should be same as DSP's */
+    IC_BIST_RELATION      ic_bist_parameter;
+    VP_RELATION           vp_parameter;
+    PLC_RELATION          plc_parameter;
+    SCENARIO_RELATION     scenario_parameter;
+    I2S_DBG_RELATION      i2s_dbg_parameter;
+    STEREO_RELATION       stereo_parameter;
+        U16 I2S_BCLK_RATE;
+    VOICE_RELATION        voice_parameter;
+
+} DSP_FUNC_PARA_CTL_STRU;
+#+END_SRC
+DSP的功能参数配置， 音箱的定义在 "..\DSP\AB1520S_DSP\DSP_PARA_AB1520S_MUSICBOX_TARGET.txt"文件中，主要包含如下内容：
+4路AEC的配置 AEC/NR/AVC， 接收和发送的噪声消除   VAD的配置， 双mic的配置，接收和发送的音效设置，还有一些PLC， PEQ等配置，以及不太看明白的其他配置。
+
+| .\output\AB1520S\Release_Flash\sector_dsp_hpf_param_type.obj |0 |0 |543 |0|
+8F7000   543 OBJECT   LOCAL  gSector_DspHpfParameter
+#+BEGIN_SRC C
+typedef struct stru_dsp_hpf_param
+{
+        U8							hpf_enable;
+        HPF_CONFIG_SECTOR			a2dp_hpf_config_sector[NUM_OF_MAX_PEQ_CONFIG];
+        HPF_CONFIG_SECTOR			linein_hpf_config_sector[NUM_OF_MAX_PEQ_CONFIG];
+
+} DSP_HPF_PARAMETER_STRU;
+
+| .\output\AB1520S\Release_Flash\sector_dsp_peq_param_type.obj |0 |0 |0 |0|
+8F721F     0 OBJECT   LOCAL  gSector_DspPeqParameter
+typedef struct stru_dsp_peq_param
+{
+        U8							num_of_a2dp_peq_config;
+        U8							num_of_linein_peq_config;
+        PEQ_CONFIG_SECTOR			a2dp_peq_config_sector[NUM_OF_MAX_PEQ_CONFIG];
+        PEQ_CONFIG_SECTOR			linein_peq_config_sector[NUM_OF_MAX_PEQ_CONFIG];
+#+END_SRC
+
+| .\source\SECTOR\sector_dsp_vp_nb.obj |0 |0 |8,706 |0|
+881BC6  8706 OBJECT   LOCAL  gSector_DspVpNb
+****** gSectorRuntimeHeader_1
+| .\output\AB1520S\Release_Flash\sector_mmi_driver_variation_nvram_type.obj |0 |0 |503 |0|
+8FA000   503 OBJECT   LOCAL  gMMI_Driver_v_nvram_init
+#+BEGIN_SRC C
+typedef struct
+{
+        MMI_LINK_KEY_TYPE link_key_info[NVRAM_LINK_KEY_ITEMS];
+        U8 current_key_index;
+        U8 lastDevInd;
+        MMI_NEW_DEVICE_PARA mmi_new_device_para;
+        U8 auth_requirments;
+
+} MMI_DRIVER_VARIATION_NVRAM_TYPE;
+#+END_SRC
+运行时的参数，用来做设备管理，存储不同设备的linkkey
+
+| .\output\AB1520S\Release_Flash\sector_mmi_customize_v_nvram.obj |0 |0 |3 |0|
+8FA600     3 OBJECT   LOCAL  gMMI_Customize_v_nvram_init
+通过给用户使用的配置区域
+****** gSectorRuntimeHeader_2
+| .\output\AB1520S\Release_Flash\sector_mmi_driver_variation_nvram_type2.obj |0 |0 |503 |0|
+8F9000   503 OBJECT   LOCAL  gMMI_Driver_v_nvram_init2
+#+BEGIN_SRC C
+typedef struct
+{
+        U8 CheckValid;
+        MISC_PARA_TYPE  misc_para;
+        LinkHistoryType air_link_history_info[NVRAM_AIR_LINK_KEY_NO];
+        LinkHistoryType fast_dongle_link_history_info;
+        LinkHistoryType link_history_info[NVRAM_LINK_KEY_ITEMS];
+} MMI_DRIVER_VARIATION_NVRAM_TYPE;
+#+END_SRC
+运行配置，FM历史，连接历史，音量等
+
+| .\output\AB1520S\Release_Flash\sector_mmi_customize_v_nvram2.obj |0 |0 |3 |0|
+8F9600     3 OBJECT   LOCAL  gMMI_Customize_v_nvram_init2
+保留给用户使用的其他配置
+
 ** 0927 WIFI性能资源需求
-*** reaktek IOT WIFI
-Heap运行内存
+*** RTK模组需要的资源开销
+使用stm32的板子， 使用realtek更新的FreeRTOS的SDK后， 可以正常的跑起来了，Wifi sta模式，驱动初始化完成，没做任何操作时heap内存使用，动态的heap加上静态内存大概80K左右， 在3503上， 南方硅谷的模组使用的内存不到30K，所以内存的差距在50K左右， 在3503或5118上很难再挤出来这么多的内存。
+需要继续看下在zephyr上带起的情况
+**** 静态资源
+| module name           | code size | data size | rodata size |
+ | 模组使用的AT命令 | 2,854     |       928 |           0 |
+ | wpa_supplicant        | 16,606    |       208 |       2,763 |
+ | wifi相关API | 11,800    |       796 |         119 |
+ | WIFI驱动 | 136,598   |     7,331 |      63,216 |
+ | lwip协议栈       | 23,452    |    21,380 |         148 |
+ | freertos            | 3,736     |    85,448 |           0 |
+ | stm32f4xx  | 2,184     |        16 |           0 |
+ | 其他              | 5,054     |       542 |          10 |
+**** 动态内存
 Wifi sta模式，驱动初始化完成，没做任何操作时heap内存使用
 | 任务stack占用             | 25832 |
 | Wifi分配的动态内存        | 29770 |
 | 小于100byte的分配占用内存 |  7406 |
 
+*** 320Kbps的音频流需要的buffer情况
+目前故事机使用的公众号资源服务器的音乐资源，以及百科问答中点播的歌曲，都是通过http方式来下载的mp3，aac等压缩格式的文件。
+
+这种使用音频文件方式的音乐资源，不像网络通话一样的音频流，使用特别的编码方式，能够通过算法来做去抖，补偿的方式来消除一些网络抖动的影响，目前采用的策略，主要还是靠网络缓冲数据的办法来平滑网络抖动。
+
+**** 3503使用psram做缓存的测试情况
+所有测试连接的AP都是办公区的ap ACTZH-PAD-PMD
++--------------+--------------+-----------------------+------------+----------+----------------------------------------------------------------------+
+| sram缓存大小 | 缓存时间(秒) | 测试时间段            | 时长(小时) | 卡顿次数 | 说明                                                                 |
++--------------+--------------+-----------------------+------------+----------+----------------------------------------------------------------------+
+| 80K          | 2s           | 18:00 ~ 10:00         | 16h        |       10 | 在夜晚，干扰少，卡顿多为1、2秒内卡顿，早上10点一次出现10秒没数据     |
++--------------+--------------+-----------------------+------------+----------+----------------------------------------------------------------------+
+| 120K         | 3s           | 13:00 ~ 16:00         | 3h         |       15 | 下午测试，卡顿也严重，多次连续数据量不足连续卡顿，出现一次10秒没数据 |
++--------------+--------------+-----------------------+------------+----------+----------------------------------------------------------------------+
+| 240K         | 6s           | 13:30 ~ 17:00         | 3.5h       |        6 | 下午测试，都是长时间数据量不足卡顿                                   |
++--------------+--------------+-----------------------+------------+----------+----------------------------------------------------------------------+
+| 360K         | 9s           | 9:00 ~ 12:00          | 3h         |       10 | 早上测试，长时间数据量不足卡顿                                       |
++--------------+--------------+-----------------------+------------+----------+----------------------------------------------------------------------+
+| 512K         | 12s          | 9:30 ~ 13:30          | 4h         |       14 | 上班时间测试，长时间数据量不足卡顿                                   |
++--------------+--------------+-----------------------+------------+----------+----------------------------------------------------------------------+
+| 1024K | 25s | 9/21 15:49 ~ 18:40,   | 17h | 5(12) | 上班时间及周六的测试，都是长时间数据量不足卡顿 |
+|       |     | 9/23 10:16 ~ 16:59    |     |       |                                                |
+|       |     | 9/25(sat) 9:8 ~ 17:24 |     |       |                                                |
++--------------+--------------+-----------------------+------------+----------+----------------------------------------------------------------------+
+
+Note:
++ 公共AP PMD是办公区的一个AP，比测试组的环境稍好，但一般比家庭网络会差很多
++ 在夜晚网络情况较好的时候， 就算80K的buffer也不太容易遇到卡顿
++ 在上午网络性能比较恶劣的情况下， 只有加大到1024K的buffer，卡顿才会比较少
++ 长时间数据量不足卡顿
+  长时间数据量不足（每秒接收数据不足320kbps）导致缓冲的数据全部消耗完以引起的卡顿
++ 1024K缓存的测试
+  其中有12次在开始下载时就出现下载数据量不足导致卡顿，这种情况，即使使用卡缓存还是会出现卡顿, 上班时间及周六的测试，都是长时间数据量不足（每秒接收数据不足320kbps）导致连续卡顿 |
+**** 其他对手样机测试情况
+***** 愤怒的小鸟
+机子tcp传输window：11200
+机子内网络数据缓存量约：60~80Kbyte（从无卡时开始下载数据量估算）
+点播：即使有卡，也不进行缓存，所以有卡与没卡，多点几首，卡顿效果一样的；
+机子下载音乐到卡速率（不播放）：750kbps；
+测试的码率是256Kbps
+
+| 测试条件 | AP           | 测试结果                          |
+| 无卡     | 单独搭建的ap | 无其他人使用该ap，播放不卡顿      |
+| 无卡     | 单独搭建的ap | 无其他人使用该ap，播放出现2次卡顿 |
+| 无卡     | 单独搭建的ap | 一台手机连上该ap，浏览网页或播放视频，多次卡顿 |
+| 有卡     | 单独搭建的ap | 无其他人使用该ap，播放不卡顿      |
+| 有卡     | 单独搭建的ap |  一台手机连上该ap，浏览网页或播放视频，多次卡顿 |
+
+Note：
++ 单独搭建AP性能
+  单独搭建的ap，网络条件算作比较好的ap
+***** ASU WIFI音箱
++ Tcp window
+  大小为size：21000
+  网络缓存数据量：大于80Kbyte    （从一次最大缓存的数据量计算）
+  按这个缓存量计算，可以缓存10s的数据，并且播放码率较低，不容易出现卡顿，而干扰较大的情况下，还是会出现卡顿。
++ 播放的音乐码率：64kbps
+  公众号上见到的音乐、在线广播，码率都是64kbps
+  连接公共AP ACTZH-PAD-PMD，播放音乐，用一个手机连接该ap，切换视频播放，ASUWIFI音箱还是有时会出现音声卡顿。
+*** 几点思考
++ 在网络不太差的情况下， 资源比较丰富的IOT芯片，还是比较大的可能做到高码率不卡顿的
++ 需要想办法尽快找到市场能够接受的卡顿标准。如果标准较高的话， 大部分的iot芯片都应该不可以。
 ** 0905 方案研发三部会议报告
 *** 标案项目相关
 **** 3703

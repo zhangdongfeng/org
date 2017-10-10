@@ -132,7 +132,6 @@
 | .\output\AB1520S\Release_Flash\sector_mp_parameter_F.obj                   |           0 | 
   
 *** COMMON模块
-
 | .\source\COMMON\flash_descriptor.obj |0 |0 |64 |0|
 802000    64 OBJECT   LOCAL  _FlashDescriptor
 应该是nor flash的分区划分。
@@ -364,7 +363,6 @@ ROM代码总共有90多K，主要功能包括：
 + H5协议支持
 + 测试模式
 + 固件升级接口
-
 
 * 任务模型
 看来起应该是是一个多任务的操作系统， 这部分不开源，但从os_task.h的头文件来看， 应该是一个简单的多任务系统，代码大小从map表上看大概6K左右，
@@ -647,7 +645,6 @@ VC_DATA_DEFINE	(REJECT)
 VC_DATA_DEFINE	(CANCEL)
 
 **** 主要工作流程
-#define DRIVER_SendCmdToMailBox(A)	MailBox_CmdHandler((DRIVERMSG_WITH_MAILBOXCMD_STRU XDATA_PTR)(A))
 
 + VoiceCommand_Start通过mailbox开始启动DSP进入命令监听状态
 + MailBox_EvtHandler在接收到有效的命令后，会通过mailbox发送识别结果
