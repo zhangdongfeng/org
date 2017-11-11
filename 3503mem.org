@@ -2,7 +2,6 @@
 #+LATEX_HEADER: \setCJKmainfont{Microsoft YaHei}
 #+OPTIONS: \n:t
 * overview
-
   + wifi模组的firmware代码 171,856
   + 提示音mp3文件 458,652
   + 各种解码格式的码表 97,719
