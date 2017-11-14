@@ -1058,6 +1058,33 @@ Alice、Bob双方即得Q=b*A=b*(a*G)=(b*a)*G=(a*b)*G=a*(b*G)=a*B=Q' (交换律�
 ** wise automotive
 [[mu4e:msgid:FD60D12E0517B0429F825C3DEC8BD06201A8FDEB@srv-mail-02.actions.com.cn][转发: WISE AUTOMOTIVE 介绍资料]]
 * 研发会议
+** 20171111 OKR
+*** 智能影音
+| object                  | description                                               | key Reults                 | score |
+| 5118B支持wifi故事机规格 | 5118B接口丰富后，可以进一步降低成本和系统功耗，挺高竞争力 | 功能规格支持3503现有规格   |       |
+|                         |                                                           | 单系统支持wifi+bt a2dp共存 |       |
+|                         |                                                           | 按时完成1~2家alpha客户试产 |       |
+
+| object                          | description                                                | key Reults                        | score |
+| 5118基于zephyr的蓝牙mcu开发平台 | 在5118B上支持全栈的蓝牙协议，为蓝牙的差异化市场提供sdk平台 | 蓝牙音频profile完整规格，同US281a |       |
+|                                 |                                                            | 其他BR/EDR BLE profile示例        |       |
+|                                 |                                                            | 1~2家alpha客户量产                |       |
+|                                 |                                                            |                                   |       |
+
+*** 智慧计算
+| object               | description                                                  | key Reults                     | score |
+| 提高S700平台广泛推广 | 在S700有基本平台后，通过不同行业标案客户的导入，继续完善平台 | 广告机和商显标杆客户design win |       |
+|                      |                                                              | S700 LInux版本标杆客户试产     |       |
+|                      |                                                              | 更多行业重点客户的design win   |       |
+
+*** 物联网
+| object      | description           | key Reults                             | score |
+| BLE开发平台 | 基于5601BLE的开发平台 | 基于Keil开发调试的集成SDK              |       |
+|             |                       | BLE mesh 语音，常见profile和驱动的示例 |       |
+|             |                       | 1~2家遥控器方案的alpha客户试产         |       |
+|             |                       | 1~2家mesh客户 mesh和语音的参考设计     |       |
+|             |                       | 开发板和96boards支持zephyr原生环境     |       |
+
 ** 1107 方案研发三部会议报告
 *** 标案项目相关
 **** 3703
@@ -6401,40 +6428,79 @@ IVT第一阶段代码完成， IVT库从130K压缩到110，第二阶段的工作
 * 代码笔记
 ** btstack
 *** port/nrf5_zephyr/main
-void main(void)
-{
-        // configure console UART by replacing CONFIG_UART_NRF5_BAUD_RATE with 115200 in uart_console.c
++ void main(void)
+  + btstack_memory_init();//each list is a single linked list pool, if define HAVE_MALLOC
+    + btstack_memory_pool_create
+      (&hci_connection_pool, hci_connection_storage,
+      MAX_NR_HCI_CONNECTIONS,
+      sizeof(hci_connection_t));
+  + btstack_run_loop_init(btstack_run_loop_zephyr_get_instance());
+    + the_run_loop->init();
+    + btstack_run_loop_zephyr_btstack_run_loop_init,
+      static const btstack_run_loop_t btstack_run_loop_wiced = {
+      & btstack_run_loop_zephyr_btstack_run_loop_init,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      & btstack_run_loop_zephyr_set_timer,
+      & btstack_run_loop_zephyr_add_timer,
+      & btstack_run_loop_zephyr_remove_timer,
+      & btstack_run_loop_zephyr_execute,
+         btstack_run_loop_remove_timer(ts);
+         ts->process(ts);
+         net_buf_get(&rx_queue, timeout_ticks);
+         transport_deliver_controller_packet(buf);
+            transport_packet_handler(HCI_ACL_DATA_PACKET, packet, size);
+            transport_packet_handler(HCI_EVENT_PACKET, packet, size);
+      & btstack_run_loop_zephyr_dump_timer,
+      & btstack_run_loop_zephyr_get_time_ms,};
+   // enable full log output while porting
+   hci_dump_open(NULL, HCI_DUMP_STDOUT);
+   // init HCI
+  + hci_init(transport_get_instance(), NULL);
+    static const hci_transport_t transport = {
+    /* const char * name; */                                        "nRF5-Zephyr",
+    /* void   (*init) (const void *transport_config); */            &transport_init,
+    /* int    (*open)(void); */                                     & transport_open,
+    /* int    (*close)(void); */                                    &transport_close,
+    /* void   (*register_packet_handler)(void (*handler)(...); */   & transport_register_packet_handler,
+            transport_packet_handler = handler;
+    /* int    (*can_send_packet_now)(uint8_t packet_type); */       NULL,
+    /* int    (*send_packet)(...); */                               & transport_send_packet,
+        buf = net_buf_alloc(&cmd_tx_pool, K_NO_WAIT);
+              bt_buf_set_type(buf, BT_BUF_CMD);
+        memcpy(net_buf_add(buf, size), packet, size);
+              bt_send(buf);
 
-        printf("BTstack booting up..\n");
+    /* int    (*set_baudrate)(uint32_t baudrate); */                NULL,
+    /* void   (*reset_link)(void); */                               NULL,
+  + btstack_hci_init(const hci_transport_t *transport, const void *config){
+    + transport->register_packet_handler(&packet_handler);
+    + packet_handler(uint8_t packet_type, uint8_t *packet, uint16_t size){
+      event_handler(packet, size);
+      acl_handler(packet, size);
+      sco_handler(packet, size);
+    + hci_state_reset();
 
-        // start with BTstack init - especially configure HCI Transport
-    btstack_memory_init();
-    btstack_run_loop_init(btstack_run_loop_zephyr_get_instance());
+   // nRF5 chipsets don't have an official public address
+   // Instead, a Static Random Address is assigned during manufacturing
+   // let's use it as well
+   big_endian_store_16(static_address, 0, NRF_FICR->DEVICEADDR[1] | 0xc000);
+   big_endian_store_32(static_address, 2, NRF_FICR->DEVICEADDR[0]);
+   gap_random_address_set(static_address);
 
-    // enable full log output while porting
-    hci_dump_open(NULL, HCI_DUMP_STDOUT);
+   // inform about BTstack state
+   hci_event_callback_registration.callback = &packet_handler;
+   hci_add_event_handler(&hci_event_callback_registration);
 
-    // init HCI
-    hci_init(transport_get_instance(), NULL);
+   // hand over to btstack embedded code
+   btstack_main();
 
-    // nRF5 chipsets don't have an official public address
-    // Instead, a Static Random Address is assigned during manufacturing
-    // let's use it as well
-    big_endian_store_16(static_address, 0, NRF_FICR->DEVICEADDR[1] | 0xc000);
-    big_endian_store_32(static_address, 2, NRF_FICR->DEVICEADDR[0]);
-    gap_random_address_set(static_address);
+   // go
+   btstack_run_loop_execute();
 
-    // inform about BTstack state
-    hci_event_callback_registration.callback = &packet_handler;
-    hci_add_event_handler(&hci_event_callback_registration);
-
-    // hand over to btstack embedded code
-    btstack_main();
-
-    // go
-    btstack_run_loop_execute();
-
-    while (1){};
+   while (1){};
 }
 
 ** zephyr
@@ -19367,6 +19433,71 @@ ssid="ACTZH-PAD-FW2"   psk="Actspa@2016"
 张东风	ftp_zhangdf	ftp123456
 
 * 出差报告
+
+** 1114 86盒子的需求
+  昨天下午小平介绍了86盒子的产品需求：远场拾音，贴在墙上（我们家中的嵌在强中那个开关或者插座）的样式，内置线性MIC（双MIC或4MIC均可接受），内嵌腔体，相当于只需要180°角度的echo dot，本身没有speak发声，通过蓝牙连接家里的BT音箱（当前需要搭配的音箱是我们ATS2825的音箱）。 细节部分小平和姚再补充一下。
+    当时沟通有讨论ATJ2273B，ATS3603和ATS3605D， 我们继续梳理一下需求，然后看看我们推荐的性价比最好的IC方案以及评估软硬件的细节。
+
+** 1110 深圳arm技术会议出差
+*** arm 蓝牙ip信息
+1．	我们强调的几个诉求：
+A：进度慢，希望他们这一个更多PUSH内部资源，加快发现的问题的澄清，尽量降低我们正式版的风险。Craig有答应回去PUSH美国资源。
+B：BQB认证：Craig承诺一定配合我们通过，我也同步SIG升级测试的风险。
+C．2层板的问题：Craig承诺提高优先级，我们反馈这个是必备的功能，是必须解决的。
+
+2．	新BT5的IP状况及信息更新：
+A：Aura RF的第一个客户的工艺是TSMC 55nm，时间点是Q1，但是这个搭配的不是ARM的modem。搭配ARM modem的是SMIC55nm，但是进度有delay，已有RF的测试报告（但是Draig也没有完全肯定）,Aura RF:0.9mm^2.
+B：ARM UMC55工艺的RF，已经有测试报告，回头追他们同步测试报告给我们。口头说是灵敏度比当前T40的低1~2dB。
+C：BT5的架构是只有modem，对外接口是AHB，他们当前的testchip上放的是M3（第一个客户），他们内部信息的资源是M0+的性能就够了。RF面积1.9mm^2,Digital:0.4mm^2
+D:ARM下一步也有规划对RF进行costdown的计划，当前目标是2018年Q3出shuttle，面积目标是0.9mm^2
+*** arm其他主题
++ nb-iot
+  arm后续重点耕耘的是nb-iot，也有cordio的ip。 cordio的意思是（cortex + radio）, arm认为这个量会比较大
++ 蓝牙mesh
+  认为mesh会有很大的需求
++ 蓝牙5.0
+  + auido over BLE
+    audio over BLE 能够降低耳机功耗， 对耳机应该有较大影响
+  + 室内定位
+    相对于BLE 4.2   5.0的室内定位除了利用RSSI信息外， 还增加了角度信息， 更容易做室内定位
++ mbed平台
+  主要讲了如何开发一个智能网关，把家庭中的各种非wifi类的设备通过智能网关连接到arm的云上
+  对mbed partner会免费开放完整的资料和代码。
+
+
+
+** 1114 大雄/老邝出差上海报告
+一、大华
+1、视频部门：
+主要针对高端会议系统，要求4K 265编码，采用inetel方案。也在评估RK3399，认为规格不够。后续没有低端产品的规划。
+机会：有分布的多MIC采集方案需求，每个端点要求6MIC，内置自己算法。也希望有无线蓝牙传输，希望可以做到46K采样规格。整个系统做到1拖20.
+代办：确认炬力平台是否有合适的多MIC规格可以推荐
+
+2、智能楼宇部门：
+此部门已经基于S500方案开案，但由于出现GPU卡死问题，未能通过老化，由于大华内部有其他的安卓平台在选型中，需要尽快定位问题。
+代办：提供CB6板子给他们做对换实验，跟进内部GPU卡死问题进展。
+
+3、广告机部门：
+去年成了的广告部门，自己销售成品，目前有自研和外采两种方式，自研平台目前是海思，基于安卓5.1开发，后续会引入其他更有性价比的平台；外购部分有跟深圳的几家主流玩家沟通过，包括视美泰。对S700 双屏异显，规格感兴趣，已经留了CB7给对方测试。
+代办：跟进客户测试情况
+
+二、鉴峰：
+智能跑步机板卡供应商，主要提供给亿建等一线品牌。
+跑步机一般是冬春季是旺季，夏秋是淡季。整个市场容量大概1KK/月。以内单为主，其中目前带彩屏的只有10%。彩屏跟普通液晶屏价差大概200左右，市场对带彩屏规格越来越接受。另外一个动感单车市场，目前约2~3KK/年，随着近年来热度增加，后续看好持续增长。
+
+鉴峰平均每月大概50K/M，彩屏市占约50~60%。目前主要用RK3188方案，512M+4G规格，后续计划用RK3128替换。产品以屏+PCBA的模组形态出售，屏幕主要是1366X768/1024X600，接口位RGB或者EDP。通过串口跟底层单片机连接。后续升级有语音控制的想法。
+
+机会：先从市场量最大的规格入手，以7051H跟RK3128竞争，但目前RK3188主要是32bit的DDR3，有性能的风险，需要测试客户APK的兼容性。另外由于以模组形态出售，客户需要保证售后，对方案稳定性也有要求。
+
+代办：提供7051H样机测试
+
+
+三、分众传媒：
+之前上海同事有提供7039ST的平台，对他们吸引力不够。当前单屏新方案在采用RK3368， 但芯片不支持LVSD ，而且没有双屏异显。对S700的规格比较感兴趣。
+目前他们一共有两个产品需求方向
+1、旧款电梯广告机的升级，原本采用RTL的方案，功能是单屏实现MP3+图片，增量+替换一起，预计200K/年。由于这个有成本需求，且会采用LINUX平台，暂时推荐S500，有比较丰富的屏接口，方便扩展。
+2、单屏/双屏广告机，目前采用RK3368/RK3288，此规格目前推荐了S700平台给他们测试。
+代办：跟进CB6 CB7的性能评估情况。
 ** 1031 学习版发布
 + 安装环境
   要方便使用，最好是可以直接使用的， 比如windows下解压就可以使用
@@ -19533,6 +19664,58 @@ EMMC问题，目前7051是可以支持emmc和nand使用同一个固件来自适�
 同时也不能排除平板方案就没有这个现象， 有可能平板也有， 但出现后， 长按8s就会复位， 掩盖了这个问题。 而故事机没有长按8s这个reset方法
 
 这个还是请各位再继续思考下是否还有其他没有考虑到的， 还需要继续做哪些实验？
+** 1023 邝、建雄福建出差
+参考以下会议记录，有任何问题请随时通知，谢谢！
+
+时间：2017/10/23
+客户：联迪(LANDI)
+客户人员：技术一部经理/硬件平台主管 肖锋，硬件工程师 张守将，采购 吴秀梅
+炬芯(ACtions)人员：邝建涛，何建雄
+友尚人员：Herman jin,Eric shen
+
+状况：
+1）	APOS(A8)，150K/M.Qualcomm 8909方案，采购核心板，价格200RMB+。供应商：移远，广和通，芯讯通。
+2）	传统POS，40K/M.Freescale 2581方案，市场容量1KK/Y.
+3）	MPOS，400K/M.Freescale K21方案，拼量，利润低。
+4）	双屏收银机，Qualcomm 8953方案，新项目，预计Q4小批量，3K/M.采购核心板。15.6寸大屏LVDS接口。
+5）	部分机种需要EDP接口，需要转换芯片，成本1USD以内。目前品牌东芝/龙讯达。
+6）	联迪大股东是法国Ingenico，联迪主要销售国内市场。东南亚市场集团逐渐开放。
+7）	员工数1800+，研发人员700+，软件约200，负责底层开发约50.
+8）	项目预研后约6-8个月的开发周期，硬件评估较方便，主要是底层、软件人员团队投入大。暂时不需要demo评估测试。
+
+后续跟进:
+1）	确认沟通S700开始预研的可能性和时间表---Eric shen.
+2）	确认RK等竞争对手的评估状况---Eric shen.
+
+
+时间：2017/10/24
+客户：星网视易(STAR-NTE)
+客户人员：硬件经理 王勇，硬件工程师 李鹏锋，平台组长 邹应双，平台工程师 叶高杨
+炬芯(ACtions)人员：邝建涛，何建雄
+友尚人员：Herman jin,Eric shen
+
+状况：
+1）KTV点播产品，250K/Y。
+主要为单机（家用）占30%+网络（娱乐，带3.5寸3T/4T普通机械硬盘）占70%。
+主要方案，RK3288占90%，BCM7241占10%。
+Realtek主方案样机测试中，具体料号暂时保密。
+2）S700（套片，双显） 开发板基本功能测试OK，已layout.
+预计11月份出样板，1月份（春节前）完成预研调试10台样机。研发周期6-9个月。
+
+后续跟进：
+1）	跟进项目进展，原厂建议样板完成贴片后寄几片同步调试沟通---Eric shen.
+2）	确认完成预研后立项流程---Eric shen.
+3）	跟进星网升腾瘦客户机(thin client)硬件主管洪金聪对S700的资料评估---Eric shen.
+
+
+时间：2017/10/24
+客户：福建冠林(AURINE)电话联系
+客户人员：新产品Sourcing 刘启平
+状况：
+1）	楼宇安防，50K/M。主要方案新唐/ITE，加PMU套片3.0USD左右。少部分高端机种使用RK3288/RK3066.
+
+后续跟进：
+1）	提供对应新唐/ITE低成本方案资料供客户评估---Herman jin.
 ** 芯蓝图问题
 + wifi休眠唤不醒问题
   在这次客户打板的智伴样机中，总共发现3台， 我们内部发现一台，客户带过来的4台样机有两台是这个问题，目前发现现象跟着样机走，南方硅谷已经在debug中
